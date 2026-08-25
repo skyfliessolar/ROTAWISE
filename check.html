@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rotawise Diagnostics</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#14273D;color:#fff;margin:0;padding:16px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:#9fb3c8;font-size:13px;margin-bottom:16px}
+.row{background:#1d3450;border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.label{font-size:12px;color:#9fb3c8;text-transform:uppercase;letter-spacing:.06em}
+.val{font-size:15px;font-weight:600;margin-top:3px;word-break:break-all}
+.ok{color:#5BD99B}.bad{color:#FF8B84}.wait{color:#F2C572}
+button{width:100%;font-size:20px;font-weight:700;padding:18px;border:0;border-radius:12px;background:#0E7A57;color:#fff;margin:14px 0 6px}
+.big{font-size:34px;font-weight:800;text-align:center}
+</style></head><body>
+<h1>Rotawise Diagnostics</h1>
+<div class="sub">Tap the green button, then screenshot this whole page.</div>
+<button id="tapbtn">TAP THIS BUTTON</button>
+<div class="row"><div class="label">Taps registered</div><div class="big" id="taps">0</div></div>
+<div class="row"><div class="label">1. App version deployed</div><div class="val wait" id="ver">checking…</div></div>
+<div class="row"><div class="label">2. Bundle downloads</div><div class="val wait" id="bundleok">checking…</div></div>
+<div class="row"><div class="label">3. Tailwind CDN</div><div class="val wait" id="tw">checking…</div></div>
+<div class="row"><div class="label">4a. DB — legacy key</div><div class="val wait" id="db">checking…</div></div>
+<div class="row"><div class="label">4b. DB — publishable key</div><div class="val wait" id="db2">checking…</div></div>
+<div class="row"><div class="label">5. Login test (admin)</div><div class="val wait" id="login">checking…</div></div>
+<div class="row"><div class="label">6. Browser</div><div class="val" id="ua">—</div></div>
+<div class="row"><div class="label">7. JS errors</div><div class="val ok" id="errs">none</div></div>
+<script>
+var taps=0;document.getElementById('tapbtn').addEventListener('click',function(){taps++;document.getElementById('taps').textContent=taps;});
+var errs=[];window.addEventListener('error',function(e){errs.push(e.message);var el=document.getElementById('errs');el.className='val bad';el.textContent=errs.slice(0,3).join(' | ');});
+document.getElementById('ua').textContent=navigator.userAgent+' — '+window.innerWidth+'px';
+function set(id,t,c){var el=document.getElementById(id);el.textContent=t;el.className='val '+(c||'');}
+var HOST='https://ukddnulxifhixatpmofz.supabase.co';
+var LEGACY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrZGRudWx4aWZoaXhhdHBtb2Z6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1OTI1MTEsImV4cCI6MjEwMzE2ODUxMX0.ab0Zkr4VWMWMU6vsadtXscvPSVpMb_tgdkCFGcBLQWg';
+var PUB='sb_publishable_rW6tXWX72TbvHbZvRG8LiQ_yKmLKKFn';
+fetch('./index.html?cb='+Date.now(),{cache:'no-store'}).then(function(r){return r.text();}).then(function(h){
+  var m=h.match(/assets\/(index-[A-Za-z0-9_\-]+\.js)/);
+  if(!m){set('bundleok','bundle not referenced','bad');return null;}
+  return fetch('./assets/'+m[1]+'?cb='+Date.now(),{cache:'no-store'});
+}).then(function(r){if(!r)return;if(!r.ok){set('bundleok','HTTP '+r.status,'bad');return;}
+  return r.text().then(function(js){set('bundleok','yes — '+Math.round(js.length/1024)+' KB','ok');
+    var v=js.match(/2026\.\d{2}\.\d{2}-\d+/);set('ver',v?v[0]:'no version marker (OLD BUILD)',v?'ok':'bad');});
+}).catch(function(e){set('bundleok','ERROR: '+e.message,'bad');});
+var s=document.createElement('script');s.src='https://cdn.tailwindcss.com';
+s.onload=function(){set('tw','loads OK','ok');};s.onerror=function(){set('tw','BLOCKED','bad');};document.head.appendChild(s);
+function testKey(k,id){fetch(HOST+'/rest/v1/stores?select=id&limit=1',{headers:{apikey:k,Authorization:'Bearer '+k}})
+  .then(function(r){return r.text().then(function(t){set(id,r.ok?'WORKS (200)':'HTTP '+r.status+' — '+t.slice(0,80),r.ok?'ok':'bad');});})
+  .catch(function(e){set(id,'BLOCKED: '+e.message,'bad');});}
+testKey(LEGACY,'db');testKey(PUB,'db2');
+fetch(HOST+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:PUB,'Content-Type':'application/json'},
+  body:JSON.stringify({email:'admin@rotawise.staff',password:'846213'})})
+  .then(function(r){return r.text().then(function(t){set('login',r.ok?'LOGIN WORKS':'HTTP '+r.status+' — '+t.slice(0,90),r.ok?'ok':'bad');});})
+  .catch(function(e){set('login','BLOCKED: '+e.message,'bad');});
+</script></body></html>
