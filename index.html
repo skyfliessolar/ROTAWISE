@@ -11,10 +11,31 @@
     <style>
       html, body, #root { height: 100%; margin: 0; background: #F4F6F8; }
     </style>
-    <script type="module" crossorigin src="/ROTAWISE/assets/index-5KVSDZsb.js"></script>
-    <link rel="stylesheet" crossorigin href="/ROTAWISE/assets/index-BZW-F2H2.css">
+    <script type="module" crossorigin src="/ROTAWISE/assets/app.js"></script>
+    <link rel="stylesheet" crossorigin href="/ROTAWISE/assets/index.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // If the app hasn't rendered in 8s, the bundle probably failed to load
+      // (usually a stale cached page). Reload once, bypassing the cache.
+      setTimeout(function () {
+        var r = document.getElementById('root');
+        if (r && r.children.length === 0) {
+          if (!sessionStorage.getItem('rw_reloaded')) {
+            sessionStorage.setItem('rw_reloaded', '1');
+            location.replace(location.pathname + '?cb=' + Date.now());
+          } else {
+            r.innerHTML = '<div style="font-family:system-ui;padding:24px;color:#14273D">'
+              + '<h2>Couldn\'t load Rotawise</h2>'
+              + '<p>Your browser may be holding an old copy. Close this tab, reopen it, '
+              + 'or clear the site data and try again.</p>'
+              + '<p style="font-size:12px;color:#888">If this keeps happening, screenshot this message.</p></div>';
+          }
+        } else {
+          sessionStorage.removeItem('rw_reloaded');
+        }
+      }, 8000);
+    </script>
   </body>
 </html>
