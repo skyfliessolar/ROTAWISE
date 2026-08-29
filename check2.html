@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rotawise — Logged-in Speed Test</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#14273D;color:#fff;margin:0;padding:16px}
+h1{font-size:19px;margin:0 0 4px}.sub{color:#9fb3c8;font-size:13px;margin-bottom:14px}
+.row{background:#1d3450;border-radius:10px;padding:10px 13px;margin-bottom:7px}
+.label{font-size:11px;color:#9fb3c8;text-transform:uppercase;letter-spacing:.06em}
+.val{font-size:15px;font-weight:700;margin-top:2px;word-break:break-all}
+.ok{color:#5BD99B}.bad{color:#FF8B84}.wait{color:#F2C572}
+button{width:100%;font-size:17px;font-weight:700;padding:15px;border:0;border-radius:12px;background:#0E7A57;color:#fff;margin:10px 0}
+input{width:100%;padding:12px;border-radius:10px;border:0;font-size:16px;margin-bottom:8px}
+</style></head><body>
+<h1>Logged-in Speed Test</h1>
+<div class="sub">Enter your code and PIN, tap Start, wait ~30s, screenshot.</div>
+<input id="code" placeholder="employee code (admin)" value="admin" autocapitalize="none">
+<input id="pin" type="password" placeholder="PIN">
+<button id="go">START TEST</button>
+<div id="out"></div>
+<script>
+var HOST='https://ukddnulxifhixatpmofz.supabase.co';
+var KEY='sb_publishable_rW6tXWX72TbvHbZvRG8LiQ_yKmLKKFn';
+var out=document.getElementById('out');
+function add(label,val,cls){
+  var d=document.createElement('div');d.className='row';
+  d.innerHTML='<div class="label">'+label+'</div><div class="val '+(cls||'')+'">'+val+'</div>';
+  out.appendChild(d);
+}
+function timeIt(label, p){
+  var t0=performance.now();
+  return p.then(function(r){
+    var ms=Math.round(performance.now()-t0);
+    return r.text().then(function(t){
+      var n='?';
+      try{ var j=JSON.parse(t); n=Array.isArray(j)?j.length+' rows':'ok'; }catch(e){ n=t.slice(0,40); }
+      add(label, ms+' ms — '+n, ms<1500?'ok':(ms<4000?'wait':'bad'));
+      return {ms:ms,text:t};
+    });
+  }).catch(function(e){ add(label,'FAILED: '+e.message,'bad'); return null; });
+}
+document.getElementById('go').onclick=function(){
+  out.innerHTML='';
+  var code=document.getElementById('code').value.trim().toLowerCase();
+  var pin=document.getElementById('pin').value;
+  var tStart=performance.now();
+  var t0=performance.now();
+  fetch(HOST+'/auth/v1/token?grant_type=password',{method:'POST',
+    headers:{apikey:KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:code+'@rotawise.staff',password:pin})})
+  .then(function(r){return r.text().then(function(t){
+    var ms=Math.round(performance.now()-t0);
+    if(!r.ok){ add('LOGIN','FAILED HTTP '+r.status+' — '+t.slice(0,80),'bad'); throw new Error('login'); }
+    add('LOGIN', ms+' ms', ms<2000?'ok':'bad');
+    var tok=JSON.parse(t).access_token;
+    var H={apikey:KEY,Authorization:'Bearer '+tok};
+    var today=new Date().toISOString().slice(0,10);
+    var wk=new Date(Date.now()-14*86400000).toISOString().slice(0,10);
+    return Promise.resolve()
+      .then(function(){return timeIt('employees',fetch(HOST+'/rest/v1/employees?select=*',{headers:H}));})
+      .then(function(){return timeIt('stores',fetch(HOST+'/rest/v1/stores?select=*',{headers:H}));})
+      .then(function(){return timeIt('leave requests',fetch(HOST+'/rest/v1/leave_requests?select=*&limit=100',{headers:H}));})
+      .then(function(){return timeIt('audit log',fetch(HOST+'/rest/v1/audit_log?select=*&limit=100',{headers:H}));})
+      .then(function(){return timeIt('ROTA week shifts',fetch(HOST+'/rest/v1/shifts?select=*&shift_date=gte.'+wk+'&shift_date=lte.'+today,{headers:H}));})
+      .then(function(){return timeIt('ALL shifts (worst case)',fetch(HOST+'/rest/v1/shifts?select=*',{headers:H}));})
+      .then(function(){return timeIt('cash records',fetch(HOST+'/rest/v1/cash_records?select=*',{headers:H}));})
+      .then(function(){
+        add('TOTAL', Math.round(performance.now()-tStart)+' ms', 'ok');
+        add('Done','Screenshot this page','ok');
+      });
+  });}).catch(function(e){ if(e.message!=='login') add('ERROR',e.message,'bad'); });
+};
+</script></body></html>
