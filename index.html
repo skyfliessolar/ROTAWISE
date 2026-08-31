@@ -19,11 +19,11 @@
     <script>
       // If the app hasn't rendered in 8s, the bundle probably failed to load
       // (usually a stale cached page). Reload once, bypassing the cache.
-      setTimeout(function () {
+      setTimeout(function () { try {
         var r = document.getElementById('root');
         if (r && r.children.length === 0) {
-          if (!sessionStorage.getItem('rw_reloaded')) {
-            sessionStorage.setItem('rw_reloaded', '1');
+          if (!localStorage.getItem('rw_reloaded_' + location.search)) {
+            try { localStorage.setItem('rw_reloaded_' + location.search, '1'); } catch (e) {}
             location.replace(location.pathname + '?cb=' + Date.now());
           } else {
             r.innerHTML = '<div style="font-family:system-ui;padding:24px;color:#14273D">'
@@ -33,9 +33,9 @@
               + '<p style="font-size:12px;color:#888">If this keeps happening, screenshot this message.</p></div>';
           }
         } else {
-          sessionStorage.removeItem('rw_reloaded');
+          try { Object.keys(localStorage).forEach(function(k){ if(k.indexOf('rw_reloaded_')===0) localStorage.removeItem(k); }); } catch (e) {}
         }
-      }, 8000);
+      } catch (e) {} }, 8000);
     </script>
   </body>
 </html>
