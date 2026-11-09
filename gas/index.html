@@ -199,10 +199,14 @@ code{background:var(--soft);padding:1px 5px;border-radius:5px;font-size:13px}
 .prod{display:grid;grid-template-columns:1fr 92px 64px 44px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
 .prod .in{padding:7px 8px;min-height:36px}
 .hd{font-size:12px;color:var(--mute);font-weight:600}
+/* shown inside Rotawise: Rotawise already shows its own logo and menu */
+.embedded .brand,.embedded .center>p.small{display:none}
+.embedded .dnav{margin-left:0}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
 <body>
+<script>try{if(window.self!==window.top)document.documentElement.classList.add("embedded")}catch(e){document.documentElement.classList.add("embedded")}</script>
 <div id="app"></div>
 <div id="sheet" aria-modal="true" role="dialog"></div>
 <div id="toast"></div>
