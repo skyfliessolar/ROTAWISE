@@ -68,5 +68,9 @@ service cloud.firestore {
     match /gas_admin/{id} {
       allow read, write: if isAdmin();
     }
+    // Copy of the Rotawise (Supabase) data: admin only
+    match /{coll}/{doc} {
+      allow read, write: if coll.matches('rw_[a-z_]+') && isAdmin();
+    }
   }
 }
