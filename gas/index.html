@@ -422,7 +422,7 @@ function attach(){
   }else{on('orders','orders',null,(a,fc)=>migrate('orders',a,fc));on('stock','stock',null,(a,fc)=>migrate('stock',a,fc))}
   on('settings','settings',a=>a.find(x=>x.id==='main')||null);
   if(isManager()){unsubs.push(store.subQuery('audit',{orderBy:'at',limit:300},a=>{S.audit=a;render()},err));on('presence','presence');on('reminders','reminders');
-    on('team','team',null,(a,fc)=>{if(!fc)S.teamLive=true;syncTeam()})}
+    unsubs.push(store.sub('team',(a,fc)=>{S.team=a;if(!fc)S.teamLive=true;syncTeam();render()},()=>{}))}
   if(isAdmin()){on('staff','staff',null,(a,fc)=>{if(!fc)S.staffLive=true;syncTeam()});on('admin','adminCfg',a=>a.find(x=>x.id==='config')||null)}
   /* employees: if the admin switches the login off or changes role/stores, apply it straight away */
   if(!isAdmin()&&S.me&&store.subOne)unsubs.push(store.subOne('staff',S.me.uid,d=>{
