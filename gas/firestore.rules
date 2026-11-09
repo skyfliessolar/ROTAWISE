@@ -10,6 +10,10 @@ service cloud.firestore {
     function isAdmin() { return isOwner() || (isStaff() && role() == 'admin'); }
     function isManager() { return isAdmin() || (isStaff() && role() == 'manager'); }
 
+    // ---- stores: staff with stores ticked only see those stores; managers see all ----
+    function myStores() { return get(staffPath()).data.get('stores', []); }
+    function storeOk(d) { return isManager() || myStores().size() == 0 || d.storeId in myStores(); }
+
     // ---- helpers ----
     function same(f) { return request.resource.data.get(f, null) == resource.data.get(f, null); }
     // staff may fix their own new entries for 30 minutes
@@ -18,23 +22,25 @@ service cloud.firestore {
         && request.time.toMillis() - resource.data.get('createdAt', 0) < 1800000;
     }
 
-    // Orders and sales: everyone can add; once saved, only managers change payment/amount/cylinders/customer
+    // Orders and sales: everyone can add; once saved, only managers change payment/amount/cylinders/customer/store
     match /gas_orders/{id} {
-      allow read: if isStaff();
+      allow read: if isStaff() && storeOk(resource.data);
       allow create: if isManager() || (isStaff()
+        && storeOk(request.resource.data)
         && request.resource.data.createdByUid == request.auth.uid
         && request.resource.data.createdAt is int
         && request.resource.data.createdAt > request.time.toMillis() - 600000
         && request.resource.data.createdAt < request.time.toMillis() + 600000
         && request.resource.data.get('deleted', false) == false);
       allow update: if isManager() || (isStaff()
+        && storeOk(resource.data) && storeOk(request.resource.data)
         && same('createdAt') && same('createdByUid') && same('deleted')
         && (ownFresh() || (same('payStatus') && same('amount') && same('items') && same('customer')
-                          && same('date') && same('orderNo') && same('method'))));
+                          && same('date') && same('orderNo') && same('method') && same('storeId'))));
       allow delete: if isAdmin();
     }
     match /gas_stock/{id} {
-      allow read: if isStaff();
+      allow read: if isStaff() && storeOk(resource.data);
       allow create, update, delete: if isManager();
     }
     match /gas_settings/{id} {
@@ -44,6 +50,11 @@ service cloud.firestore {
     // Employee list: only the admin sees it; each person can read their own record
     match /gas_staff/{uid} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow write: if isAdmin();
+    }
+    // Names, codes and stores (no emails) so managers can send reminders to employees
+    match /gas_team/{uid} {
+      allow read: if isManager();
       allow write: if isAdmin();
     }
     // Login code -> version lookup used on the sign-in screen (no personal data)
@@ -62,10 +73,20 @@ service cloud.firestore {
       allow read: if isManager();
       allow write: if isStaff() && request.auth.uid == uid;
     }
-    // Managers manage reminders; an employee can read the reminders sent to them
+    // Reminders: managers manage all. An employee sees reminders sent to them,
+    // sets their own (only for themselves), and can mark any of theirs done.
     match /gas_reminders/{id} {
       allow read: if isManager() || (isStaff() && request.auth.uid in resource.data.toUids);
-      allow write: if isManager();
+      allow create: if isManager() || (isStaff()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.toUids == [request.auth.uid]);
+      allow update: if isManager() || (isStaff() && request.auth.uid in resource.data.toUids && (
+        (resource.data.get('createdByUid', '') == request.auth.uid
+          && request.resource.data.createdByUid == request.auth.uid
+          && request.resource.data.toUids == [request.auth.uid])
+        || request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['active', 'doneAt', 'nextAt', 'sentFor', 'doneBy', 'doneByUid'])));
+      allow delete: if isManager() || (isStaff() && resource.data.get('createdByUid', '') == request.auth.uid);
     }
     match /gas_admin/{id} {
       allow read, write: if isAdmin();
