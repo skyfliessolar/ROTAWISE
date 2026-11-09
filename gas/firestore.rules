@@ -1,8 +1,72 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{collection}/{doc} {
-      allow read, write: if request.auth != null && collection in ['gas_orders', 'gas_stock', 'gas_settings'];
+    // ---- who is signed in ----
+    function signedIn() { return request.auth != null; }
+    function isOwner() { return signedIn() && request.auth.uid == '5nI7ZEVbX8Uya6Kc2HGeEpu5tFx1'; }
+    function staffPath() { return /databases/$(database)/documents/gas_staff/$(request.auth.uid); }
+    function isStaff() { return isOwner() || (signedIn() && exists(staffPath()) && get(staffPath()).data.active == true); }
+    function role() { return get(staffPath()).data.role; }
+    function isAdmin() { return isOwner() || (isStaff() && role() == 'admin'); }
+    function isManager() { return isAdmin() || (isStaff() && role() == 'manager'); }
+
+    // ---- helpers ----
+    function same(f) { return request.resource.data.get(f, null) == resource.data.get(f, null); }
+    // staff may fix their own new entries for 30 minutes
+    function ownFresh() {
+      return resource.data.get('createdByUid', '') == request.auth.uid
+        && request.time.toMillis() - resource.data.get('createdAt', 0) < 1800000;
+    }
+
+    // Orders and sales: everyone can add; once saved, only managers change payment/amount/cylinders/customer
+    match /gas_orders/{id} {
+      allow read: if isStaff();
+      allow create: if isManager() || (isStaff()
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdAt is int
+        && request.resource.data.createdAt > request.time.toMillis() - 600000
+        && request.resource.data.createdAt < request.time.toMillis() + 600000
+        && request.resource.data.get('deleted', false) == false);
+      allow update: if isManager() || (isStaff()
+        && same('createdAt') && same('createdByUid') && same('deleted')
+        && (ownFresh() || (same('payStatus') && same('amount') && same('items') && same('customer')
+                          && same('date') && same('orderNo') && same('method'))));
+      allow delete: if isAdmin();
+    }
+    match /gas_stock/{id} {
+      allow read: if isStaff();
+      allow create, update, delete: if isManager();
+    }
+    match /gas_settings/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    // Employee list: only the admin sees it; each person can read their own record
+    match /gas_staff/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow write: if isAdmin();
+    }
+    // Login code -> version lookup used on the sign-in screen (no personal data)
+    match /gas_logins/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isAdmin();
+    }
+    // Change history: anyone writes their own entries, only managers read, nobody edits
+    match /gas_audit/{id} {
+      allow read: if isManager();
+      allow create: if isStaff() && request.resource.data.byUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    match /gas_presence/{uid} {
+      allow read: if isManager();
+      allow write: if isStaff() && request.auth.uid == uid;
+    }
+    match /gas_reminders/{id} {
+      allow read, write: if isManager();
+    }
+    match /gas_admin/{id} {
+      allow read, write: if isAdmin();
     }
   }
 }
