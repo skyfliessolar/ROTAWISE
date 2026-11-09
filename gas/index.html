@@ -334,6 +334,7 @@ const Local={
   write(c,o){mem[c]=o;lsSet('gdt_'+c,JSON.stringify(o))},
   sub(c,cb){(this.subs[c]??=[]).push(cb);cb(Object.values(this.read(c)));return()=>{this.subs[c]=(this.subs[c]||[]).filter(x=>x!==cb)}},
   subQuery(c,o,cb){return this.sub(c,a=>cb(a.sort((x,y)=>(y[o.orderBy]||0)-(x[o.orderBy]||0)).slice(0,o.limit)))},
+  subWhere(c,f,op,v,cb){return this.sub(c,a=>cb(a.filter(x=>op==='array-contains'?(x[f]||[]).includes(v):x[f]===v)))},
   emit(c){(this.subs[c]||[]).forEach(cb=>cb(Object.values(this.read(c))))},
   async put(c,id,o){const d=this.read(c);d[id]={...clean(o),id};this.write(c,d);this.emit(c)},
   async add(c,o){return this.put(c,uid(),o)},
@@ -358,6 +359,7 @@ async function makeCloud(cfg){
     signOut:()=>Au.signOut(auth),
     sub:(c,cb,err)=>F.onSnapshot(F.collection(db,P+c),s=>cb(docs(s)),err),
     subQuery:(c,o,cb,err)=>F.onSnapshot(F.query(F.collection(db,P+c),F.orderBy(o.orderBy,'desc'),F.limit(o.limit)),s=>cb(docs(s)),err),
+    subWhere:(c,f,op,v,cb,err)=>F.onSnapshot(F.query(F.collection(db,P+c),F.where(f,op,v)),s=>cb(docs(s)),err),
     getOne:async(c,id)=>{const s=await F.getDoc(F.doc(db,P+c,id));return s.exists()?{...s.data(),id:s.id}:null},
     put:(c,id,o)=>F.setDoc(F.doc(db,P+c,id),clean(strip(o))),
     add:(c,o)=>F.addDoc(F.collection(db,P+c),clean(o)),
@@ -385,6 +387,7 @@ function attach(){
   on('orders','orders');on('stock','stock');on('settings','settings',a=>a.find(x=>x.id==='main')||null);
   if(isManager()){unsubs.push(store.subQuery('audit',{orderBy:'at',limit:300},a=>{S.audit=a;render()},err));on('presence','presence');on('reminders','reminders')}
   if(isAdmin()){on('staff','staff');on('admin','adminCfg',a=>a.find(x=>x.id==='config')||null)}
+  if(!isManager()&&S.me)unsubs.push(store.subWhere('reminders','toUids','array-contains',S.me.uid,a=>{S.reminders=a;render()},()=>{}));
   if(store.mode==='cloud'&&!isAdmin()){beat();hb=setInterval(beat,45000)}
 }
 function beat(){if(!S.me||isAdmin()||store.mode!=='cloud')return;
@@ -396,7 +399,7 @@ async function identify(u){
   }
   const d=await store.getOne('staff',u.uid);
   if(!d||d.active!==true)throw new Error('This login is switched off. Ask your admin.');
-  return{uid:u.uid,code:d.code,name:d.name,role:d.role||'staff'};
+  return{uid:u.uid,code:d.code,name:d.name,role:d.role||'staff',email:d.email||''};
 }
 async function boot(){
   const cfg=cloudConfig();
@@ -614,9 +617,11 @@ function homeHtml(){
   const soldRows=Object.entries(sold).sort((a,b)=>b[1]-a[1]);const mx=Math.max(1,...soldRows.map(r=>r[1]));
   const pl=n=>`${n} order${n===1?'':'s'}`;
   const sn=stockNow();const low=lowList(sn);const due=isManager()?dueReminders():[];
+  const mine=!isManager()?S.reminders.filter(r=>r.active!==false).sort((a,b)=>(a.nextAt||'').localeCompare(b.nextAt||'')):[];
   return`<h1>${isManager()?'Overview':'Hello, '+esc(S.me?.name||'')}</h1>
   <div class="qa"><button class="btn big" data-act="sale">Quick sale</button><button class="btn big sec" data-act="new-order">New delivery order</button></div>
   ${due.length?`<div class="banner warn"><b>${due.length} reminder${due.length===1?'':'s'} due</b> · ${esc(due[0].title)}${due.length>1?' and more':''} <button class="btn sm sec" data-act="nav" data-v="reminders" style="margin-left:6px">Open</button></div>`:''}
+  ${mine.length?`<div class="banner ${mine.some(r=>(r.nextAt||'')<=nowLocal())?'warn':'info'}"><b>Reminders for you</b>${mine.slice(0,4).map(r=>`<div class="small" style="margin-top:4px">${(r.nextAt||'')<=nowLocal()?'<b class="t-bad">Due</b> ':''}${fwhen(r.nextAt)} · ${esc(r.title)}${r.note?' · '+esc(r.note):''}</div>`).join('')}</div>`:''}
   ${low.length?`<div class="banner bad"><b>Low stock:</b> ${low.map(p=>`${esc(pName(p))} (${sn.now[p.id]||0})`).join(', ')}</div>`:''}
   ${flags.length&&isManager()?`<h2>Flagged doubts</h2>${flags.map(orderCard).join('')}`:''}
   <div class="chips" style="margin-top:14px">${per.map(([k,l])=>`<button class="chip ${S.period===k?'on':''}" data-act="period" data-v="${k}">${l}</button>`).join('')}</div>
@@ -898,10 +903,11 @@ function remindersHtml(){
   const cfg=S.adminCfg||{};const runner=cfg.runnerLastRun&&Date.now()-cfg.runnerLastRun<45*60000;
   const rep={none:'Once',daily:'Every day',weekly:'Every week',monthly:'Every month'};
   return`<div class="row"><h1 style="margin-right:auto">Reminders</h1><button class="btn" data-act="reminder-new">Add reminder</button></div>
-  <div class="banner ${runner?'info':'warn'}">${runner?`<b>Email reminders are on.</b> Checked ${ago(cfg.runnerLastRun)}. Due reminders are emailed to the business owner${cfg.extraTo?' and '+esc(cfg.extraTo):''}.`:
+  <div class="banner ${runner?'info':'warn'}">${runner?`<b>Email reminders are on.</b> Checked ${ago(cfg.runnerLastRun)}. Each reminder is emailed to the people ticked on it.`:
    `<b>Email sending is not running yet.</b> Reminders still show here and on Home when due.${isAdmin()?' See Settings > Email reminders.':''}`}</div>
   ${act.length?`<div class="list">${act.map(r=>{const due=(r.nextAt||'')<=now;return`<div class="li"><div class="grow"><b style="${due?'color:var(--bad)':''}">${esc(r.title)}</b>
-    <div class="meta">${fwhen(r.nextAt)} · ${rep[r.repeat||'none']}${r.note?' · '+esc(r.note):''}${r.sentFor===r.nextAt?' · emailed':''}</div></div>
+    <div class="meta">${fwhen(r.nextAt)} · ${rep[r.repeat||'none']}${r.note?' · '+esc(r.note):''}${r.sentFor===r.nextAt?' · emailed':''}</div>
+    <div class="meta">Email to: ${esc(recipText(r))}</div></div>
     <div class="row">${due?`<button class="btn sm" data-act="reminder-done" data-id="${esc(r.id)}">Done</button>`:''}<button class="btn sm sec" data-act="reminder-edit" data-id="${esc(r.id)}">Edit</button></div></div>`}).join('')}</div>`
    :'<div class="card empty">No reminders. Add one, or use Remind me on an order.</div>'}
   ${done.length?`<h2>Done</h2><div class="list">${done.map(r=>`<div class="li"><div class="grow">${esc(r.title)}<div class="meta">${fwhen(r.nextAt)}</div></div><button class="btn sm sec" data-act="reminder-edit" data-id="${esc(r.id)}">Edit</button></div>`).join('')}</div>`:''}`;
@@ -919,7 +925,7 @@ function settingsHtml(){
    ${isManager()?'<button class="btn sec sm" data-act="nav" data-v="activity">Activity</button><button class="btn sec sm" data-act="nav" data-v="reminders">Reminders</button>':''}</div></div>
   ${isAdmin()?`<h2>Employees and logins</h2>
   <div class="card">${store.mode!=='cloud'?'<p class="muted">Employee logins need the online database.</p>':`
-   ${staff.length?`<div class="list" style="border:0">${staff.map(s=>`<div class="li" style="padding:10px 0"><div class="grow"><b>${esc(s.name)}</b> ${online(s.id)?'<span class="dot"></span>':''}<div class="meta">Code <b>${esc(s.code)}</b> · ${ROLE_LABEL[s.role]||'Staff'}${s.active?'':' · <span class="t-bad">switched off</span>'}</div></div>
+   ${staff.length?`<div class="list" style="border:0">${staff.map(s=>`<div class="li" style="padding:10px 0"><div class="grow"><b>${esc(s.name)}</b> ${online(s.id)?'<span class="dot"></span>':''}<div class="meta">Code <b>${esc(s.code)}</b> · ${ROLE_LABEL[s.role]||'Staff'}${s.email?' · ✉ '+esc(s.email):' · no email'}${s.active?'':' · <span class="t-bad">switched off</span>'}</div></div>
      <button class="btn sm sec" data-act="staff-edit" data-id="${esc(s.id)}">Manage</button></div>`).join('')}</div>`:'<p class="muted">No employees yet.</p>'}
    <button class="btn sm" data-act="staff-new" style="margin-top:8px">Add employee</button>
    <p class="hint">Employees sign in with their code and PIN. Staff can add orders and sales, mark deliveries and flag doubts. Payment, amount and cylinders lock once saved (they get ${EDIT_WINDOW_MS/60000} minutes to fix their own new entries). Managers can change everything and see Activity.</p>`}</div>`:''}
@@ -1084,6 +1090,7 @@ function staffSheet(id){
    <div><label class="l" for="st-n">Name</label><input class="in" id="st-n" name="name" required value="${esc(s?.name||'')}"></div>
    <div class="f2"><div><label class="l" for="st-c">Login code</label><input class="in" id="st-c" name="code" required ${s?'disabled':''} value="${esc(s?.code||'')}" placeholder="e.g. ravi" autocapitalize="none"></div>
    <div><label class="l" for="st-r">Role</label><select class="in" id="st-r" name="role">${['staff','manager','admin'].map(r=>`<option value="${r}" ${(s?.role||'staff')===r?'selected':''}>${ROLE_LABEL[r]}</option>`).join('')}</select></div></div>
+   <div><label class="l" for="st-e">Email for reminders (optional)</label><input class="in" id="st-e" name="email" type="email" value="${esc(s?.email||'')}" placeholder="name@example.com" autocomplete="off"><div class="hint">Only you can see it. Used to email them reminders.</div></div>
    <div><label class="l" for="st-p">${s?'New PIN (leave blank to keep)':'PIN (4–8 digits)'}</label><input class="in" id="st-p" name="pin" inputmode="numeric" autocomplete="new-password" ${s?'':'required'} pattern="\\d{4,8}"></div>
    ${s?`<label class="row"><input type="checkbox" name="active" ${s.active?'checked':''}> Login switched on</label>`:''}
    <p class="hint" style="margin:0">Give the employee their code and PIN. They sign in under Employee. Only you can see this list.</p>
@@ -1093,8 +1100,9 @@ function staffSheet(id){
 async function saveStaff(f){
   const err=m=>{$('#sterr').textContent=m};
   const s=f.dataset.id?S.staff.find(x=>x.id===f.dataset.id):null;
-  const name=f.elements.name.value.trim(),role=f.elements.role.value,pin=f.elements.pin.value.trim();
+  const name=f.elements.name.value.trim(),role=f.elements.role.value,pin=f.elements.pin.value.trim(),email=f.elements.email.value.trim();
   if(!name)return err('Enter a name.');
+  if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return err('That email address does not look right.');
   if(pin&&!/^\d{4,8}$/.test(pin))return err('PIN must be 4–8 digits.');
   const btn=f.querySelector('[type=submit]');btn.disabled=true;
   try{
@@ -1103,7 +1111,7 @@ async function saveStaff(f){
       if(!/^[a-z0-9]{2,20}$/.test(code))return err('Code must be 2–20 letters or numbers.');
       if(code==='admin')return err('Choose a different code.');
       if(await store.getOne('logins',code))return err('That code is already used.');
-      S.pending={mode:'new',code,name,role,pin,v:1};
+      S.pending={mode:'new',code,name,role,pin,email,v:1};
       const nu=await store.createLogin(staffEmail(code,1),pinPw(pin));
       await finishStaff(nu);
       closeSheet();toast(`Login created for ${name}: code ${code}`);
@@ -1111,12 +1119,12 @@ async function saveStaff(f){
       const active=!!f.elements.active?.checked;
       if(pin){
         const v=(s.v||1)+1;
-        S.pending={mode:'pin',code:s.code,name,role,active,pin,v,old:s};
+        S.pending={mode:'pin',code:s.code,name,role,active,pin,email,v,old:s};
         const nu=await store.createLogin(staffEmail(s.code,v),pinPw(pin));
         await finishStaff(nu);
       }else{
-        await store.put('staff',s.id,{...strip(s),name,role,active});
-        const ch=[s.name!==name?`name → ${name}`:'',s.role!==role?`role → ${ROLE_LABEL[role]}`:'',s.active!==active?(active?'switched on':'switched off'):''].filter(Boolean).join(', ');
+        await store.put('staff',s.id,{...strip(s),name,role,active,email});
+        const ch=[s.name!==name?`name → ${name}`:'',s.role!==role?`role → ${ROLE_LABEL[role]}`:'',s.active!==active?(active?'switched on':'switched off'):'',(s.email||'')!==email?'email updated':''].filter(Boolean).join(', ');
         if(ch)audit('Updated employee','staff',s.id,`${s.name} (${s.code}): ${ch}`);
       }
       closeSheet();toast('Saved');
@@ -1144,13 +1152,14 @@ function manualLoginSheet(){
 async function finishStaff(nu){
   const pd=S.pending;if(!pd)return;
   if(pd.mode==='new'){
-    await store.put('staff',nu,{code:pd.code,name:pd.name,role:pd.role,active:true,v:pd.v,createdAt:Date.now()});
+    await store.put('staff',nu,{code:pd.code,name:pd.name,role:pd.role,email:pd.email||'',active:true,v:pd.v,createdAt:Date.now()});
     await store.put('logins',pd.code,{v:pd.v});
     audit('Added employee','staff',nu,`${pd.name} (${pd.code}) as ${ROLE_LABEL[pd.role]}`);
   }else{
     const s=pd.old;
-    await store.put('staff',nu,{...strip(s),name:pd.name,role:pd.role,active:pd.active,v:pd.v,createdAt:Date.now()});
+    await store.put('staff',nu,{...strip(s),name:pd.name,role:pd.role,email:pd.email||'',active:pd.active,v:pd.v,createdAt:Date.now()});
     await store.put('staff',s.id,{...strip(s),active:false,replacedBy:nu});
+    for(const r of S.reminders.filter(r=>(r.toUids||[]).includes(s.id)))await store.put('reminders',r.id,{...r,toUids:r.toUids.map(x=>x===s.id?nu:x)});
     await store.put('logins',s.code,{v:pd.v});
     audit('Changed PIN','staff',nu,`${pd.name} (${s.code})`);
   }
@@ -1166,6 +1175,11 @@ function reminderSheet(id,pre={}){
    <div><label class="l" for="rm-h">Time</label><input class="in" id="rm-h" name="h" type="time" required value="${esc((def.nextAt||'').slice(11,16)||'09:00')}"></div></div>
    <div><label class="l" for="rm-r">Repeat</label><select class="in" id="rm-r" name="repeat">${[['none','Once'],['daily','Every day'],['weekly','Every week'],['monthly','Every month']].map(([k,l])=>`<option value="${k}" ${def.repeat===k?'selected':''}>${l}</option>`).join('')}</select></div>
    <div><label class="l" for="rm-n">Note (optional)</label><input class="in" id="rm-n" name="note" value="${esc(def.note||'')}"></div>
+   <div><div class="l">Email to</div><div class="card" style="padding:6px 12px">
+    <label class="row" style="padding:6px 0"><input type="checkbox" name="toOwner" ${def.toOwner!==false?'checked':''}> ${isAdmin()?'Me (admin)':'The business owner'}</label>
+    ${remPeople().map(p=>`<label class="row" style="padding:6px 0;border-top:1px solid var(--line)"><input type="checkbox" name="to_${esc(p.id)}" ${(def.toUids||[]).includes(p.id)?'checked':''}> ${esc(p.name)} <span class="muted small">${esc(p.code)}${isAdmin()?' · '+esc(p.email):''}</span></label>`).join('')}
+    ${isAdmin()&&!remPeople().length?'<p class="hint">To email an employee, add their email under Settings › Employees and logins.</p>':''}
+   </div><div class="hint">Employees you tick also see this reminder in their app.</div></div>
    ${r?`<label class="row"><input type="checkbox" name="active" ${r.active!==false?'checked':''}> Active</label>`:''}
    <div class="sticky-foot">${r?'<button type="button" class="btn danger" data-act="reminder-del">Delete</button>':''}<button class="btn" type="submit">Save reminder</button></div></form>`);
 }
@@ -1174,10 +1188,19 @@ function saveReminder(f){
   const nextAt=`${f.elements.d.value}T${f.elements.h.value}`;
   const r={...(old||{}),id:old?.id||uid(),title:f.elements.title.value.trim(),note:f.elements.note.value.trim(),nextAt,repeat:f.elements.repeat.value,
     active:f.elements.active?f.elements.active.checked:true,orderId:f.dataset.order||old?.orderId||'',createdBy:old?.createdBy||byMe(),createdAt:old?.createdAt||Date.now()};
+  const ppl=remPeople();const picked=ppl.filter(p=>f.elements['to_'+p.id]?.checked);
+  const kept=(old?.toUids||[]).map((id,i)=>({id,name:(old.toNames||[])[i]||''})).filter(x=>!ppl.some(p=>p.id===x.id));
+  r.toOwner=!!f.elements.toOwner.checked;r.toUids=[...picked.map(p=>p.id),...kept.map(x=>x.id)];r.toNames=[...picked.map(p=>p.name),...kept.map(x=>x.name)];
+  if(!r.toOwner&&!r.toUids.length)r.toOwner=true;
   if(old&&old.nextAt!==nextAt)delete r.sentFor;
   closeSheet();toast('Reminder saved');write(()=>store.put('reminders',r.id,r));
   audit(old?'Edited reminder':'Added reminder','reminder',r.id,`${r.title} · ${fwhen(r.nextAt)}`);
 }
+function remPeople(){
+  if(isAdmin())return S.staff.filter(s=>!s.replacedBy&&!s.owner&&s.active&&s.email).map(s=>({id:s.id,name:s.name,code:s.code,email:s.email})).sort((a,b)=>a.name.localeCompare(b.name));
+  return S.me?.email?[{id:S.me.uid,name:S.me.name,code:S.me.code,email:S.me.email}]:[];
+}
+const recipText=r=>[r.toOwner!==false?(isAdmin()?'Me':'Owner'):'',...(r.toNames||[])].filter(Boolean).join(', ')||'Owner';
 function advance(at,rep){const d=new Date(at);if(rep==='daily')d.setDate(d.getDate()+1);else if(rep==='weekly')d.setDate(d.getDate()+7);else if(rep==='monthly')d.setMonth(d.getMonth()+1);return isoOf(d)+'T'+pad(d.getHours())+':'+pad(d.getMinutes())}
 function reminderDone(id){
   const r=S.reminders.find(x=>x.id===id);if(!r)return;

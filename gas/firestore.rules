@@ -62,8 +62,10 @@ service cloud.firestore {
       allow read: if isManager();
       allow write: if isStaff() && request.auth.uid == uid;
     }
+    // Managers manage reminders; an employee can read the reminders sent to them
     match /gas_reminders/{id} {
-      allow read, write: if isManager();
+      allow read: if isManager() || (isStaff() && request.auth.uid in resource.data.toUids);
+      allow write: if isManager();
     }
     match /gas_admin/{id} {
       allow read, write: if isAdmin();
