@@ -1,11 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only signed-in users can read or write. Create your users manually in
-    // Firebase Console > Authentication, and keep public sign-up off.
     match /{collection}/{doc} {
-      allow read, write: if request.auth != null
-        && collection in ['orders','stock','settings'];
+      allow read, write: if request.auth != null && collection in ['gas_orders', 'gas_stock', 'gas_settings'];
     }
   }
 }

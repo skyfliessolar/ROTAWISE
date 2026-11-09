@@ -214,7 +214,17 @@ code{background:var(--soft);padding:1px 5px;border-radius:5px;font-size:13px}
    Firestore database. (The web config is not secret: access is
    protected by Firebase Authentication + firestore.rules.)
    ============================================================ */
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBGR-i8LHuPHPL4sSCFJCwzYRqgnTSeVH8",
+  authDomain: "rotawise-a2b16.firebaseapp.com",
+  projectId: "rotawise-a2b16",
+  storageBucket: "rotawise-a2b16.firebasestorage.app",
+  messagingSenderId: "506340621414",
+  appId: "1:506340621414:web:2f5ff84b2ddfef0905c1a7"
+};
+/* Gas data lives in its own collections (gas_orders, gas_stock, gas_settings)
+   inside the Rotawise Firebase project, so it never clashes with other Rotawise data. */
+const COLLECTION_PREFIX='gas_';
 const FIREBASE_VERSION='10.14.1';
 
 /* ---------- helpers ---------- */
@@ -284,10 +294,10 @@ async function makeCloud(cfg){
     onAuth:cb=>Au.onAuthStateChanged(auth,cb),
     signIn:(e,p)=>Au.signInWithEmailAndPassword(auth,e,p),
     signOut:()=>Au.signOut(auth),
-    sub:(c,cb,err)=>F.onSnapshot(F.collection(db,c),s=>cb(s.docs.map(d=>({...d.data(),id:d.id}))),err),
-    put:(c,id,o)=>F.setDoc(F.doc(db,c,id),clean(o)),
-    del:(c,id)=>F.deleteDoc(F.doc(db,c,id)),
-    has:async(c,id)=>{try{return (await F.getDocFromCache(F.doc(db,c,id))).exists()}catch{return (await F.getDoc(F.doc(db,c,id))).exists()}}
+    sub:(c,cb,err)=>F.onSnapshot(F.collection(db,COLLECTION_PREFIX+c),s=>cb(s.docs.map(d=>({...d.data(),id:d.id}))),err),
+    put:(c,id,o)=>F.setDoc(F.doc(db,COLLECTION_PREFIX+c,id),clean(o)),
+    del:(c,id)=>F.deleteDoc(F.doc(db,COLLECTION_PREFIX+c,id)),
+    has:async(c,id)=>{const r=F.doc(db,COLLECTION_PREFIX+c,id);try{return (await F.getDocFromCache(r)).exists()}catch{return (await F.getDoc(r)).exists()}}
   };
 }
 function cloudConfig(){
