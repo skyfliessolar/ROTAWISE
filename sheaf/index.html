@@ -63,6 +63,13 @@ a{color:var(--accent)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .no-ai .btn.ai,.no-ai .ai-pill,.no-ai .aipanel{display:none!important}
+.sh-grid td.hasfill{background:var(--fill)}
+.sh-grid td.hasfill.insel{background:color-mix(in srgb,var(--accent) 22%,var(--fill))}
+.sh-grid td.bd{box-shadow:inset 1px 1px 0 #5b6478;border-right-color:#5b6478;border-bottom-color:#5b6478}
+.sh-tb .ib.on{background:var(--accent-soft);color:var(--accent)}
+.sh-tb input[type=color]{width:30px;height:28px;padding:1px;border:1px solid var(--rule-2);border-radius:6px;background:var(--sheet);cursor:pointer}
+.sh-tb .clr{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--ink-3);margin:0 2px}
+.sh-tb select.inp{height:30px;width:auto;padding:0 6px;font-size:12.5px}
 /* inside Rotawise: no second app header or welcome banner */
 .embed .topbar .brand{display:none}
 .embed .topbar{padding-block:8px}
@@ -711,7 +718,8 @@ const LIBS = {
   pdflib: { src: [CDN + '@cantoo/pdf-lib@2.5.3/dist/pdf-lib.min.js'], ok: () => window.PDFLib, init() { patchPdfStrings(window.PDFLib); } },
   mammoth: { src: [CDN + 'mammoth@1.9.1/mammoth.browser.min.js'], ok: () => window.mammoth },
   docx: { src: [CDN + 'docx@9.5.1/dist/index.iife.js'], ok: () => window.docx },
-  xlsx: { src: [CDN + 'xlsx@0.18.5/dist/xlsx.full.min.js'], ok: () => window.XLSX },
+  xlsx: { src: [CDN + 'xlsx@0.18.5/dist/xlsx.full.min.js'], ok: () => window.XLSX, init() { window.__xlsxCE = window.XLSX; } },
+  xstyle: { src: [CDN + 'xlsx-js-style@1.2.0/dist/xlsx.bundle.js'], ok: () => window.XLSXS, init() { window.XLSXS = window.XLSX; if (window.__xlsxCE) window.XLSX = window.__xlsxCE; } },
   jszip: { src: [CDN + 'jszip@3.10.1/dist/jszip.min.js'], ok: () => window.JSZip },
   h2c: { src: [CDN + 'html2canvas@1.4.1/dist/html2canvas.min.js'], ok: () => window.html2canvas },
   heic: { src: [CDN + 'heic2any@0.0.4/dist/heic2any.min.js'], ok: () => window.heic2any },
@@ -3382,6 +3390,88 @@ function mountPdfToExcel(view, def) {
   return { load };
 }
 
+/* ---- spreadsheet formatting shared by the editor ---- */
+const NF_DEFAULT_DEC = nf => nf === 'pct' ? 0 : nf === 'date' ? null : 2;
+function nfCode(f) {
+  if (!f || (!f.nf && f.dec == null)) return null;
+  const dec = f.dec ?? NF_DEFAULT_DEC(f.nf); const d = dec ? '.' + '0'.repeat(dec) : '';
+  if (f.nf === 'gbp') return '"£"#,##0' + d;
+  if (f.nf === 'pct') return '0' + d + '%';
+  if (f.nf === 'date') return 'dd/mm/yyyy';
+  return '#,##0' + d;
+}
+function nfFromCode(code) {
+  if (!code || /^general$/i.test(code) || code === '@') return null;
+  const first = String(code).split(';')[0];
+  const dm = /\.(0+)/.exec(first); const dec = dm ? dm[1].length : 0;
+  if (/£|\[\$£|GBP/i.test(first)) return { nf: 'gbp', dec };
+  if (/%/.test(first)) return { nf: 'pct', dec };
+  if (/(^|[^"\\])[dmy]{1,4}/i.test(first.replace(/"[^"]*"/g, '')) && !/0/.test(first)) return { nf: 'date' };
+  if (/[0#]/.test(first)) return { nf: 'num', dec };
+  return null;
+}
+function fmtValue(v, f) {
+  if (!f || (!f.nf && f.dec == null)) return null;
+  if (typeof v !== 'number') {
+    if (f.nf === 'date' && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10).split('-').reverse().join('/');
+    return null;
+  }
+  if (f.nf === 'date') { const d = FX.fromSerial(v); return isNaN(d) ? null : d.toISOString().slice(0, 10).split('-').reverse().join('/'); }
+  const dec = f.dec ?? NF_DEFAULT_DEC(f.nf);
+  const n = x => x.toLocaleString('en-GB', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  if (f.nf === 'gbp') return (v < 0 ? '-£' : '£') + n(Math.abs(v));
+  if (f.nf === 'pct') return n(v * 100) + '%';
+  return n(v);
+}
+const hex6 = c => String(c || '').replace('#', '').toUpperCase();
+function xsStyle(f) {
+  const st = {}; const font = {};
+  if (f.b) font.bold = true; if (f.i) font.italic = true; if (f.u) font.underline = true; if (f.color) font.color = { rgb: 'FF' + hex6(f.color) };
+  if (Object.keys(font).length) st.font = font;
+  if (f.fill) st.fill = { patternType: 'solid', fgColor: { rgb: hex6(f.fill) } };
+  if (f.align) st.alignment = { horizontal: f.align };
+  if (f.bd) { const t = { style: 'thin', color: { rgb: '000000' } }; st.border = { top: t, bottom: t, left: t, right: t }; }
+  const z = nfCode(f); if (z) st.numFmt = z;
+  return Object.keys(st).length ? st : null;
+}
+/* Formatting saved in an .xlsx (bold, italic, underline, colours, fill, alignment, borders, number formats), per sheet. */
+async function xlsxFormats(buf) {
+  const out = {};
+  try {
+    await need('jszip'); const z = await JSZip.loadAsync(buf); const DP = new DOMParser();
+    const rd = async n => { const f = z.file(n); return f ? DP.parseFromString(await f.async('string'), 'application/xml') : null; };
+    const [sty, wbx, rels] = await Promise.all([rd('xl/styles.xml'), rd('xl/workbook.xml'), rd('xl/_rels/workbook.xml.rels')]);
+    if (!sty || !wbx || !rels) return out;
+    const kids = (el, tag) => el ? [...el.children].filter(x => x.localName === tag) : [];
+    const one = (el, tag) => el ? [...el.getElementsByTagNameNS('*', tag)][0] : null;
+    const rgbOf = el => { const v = el && el.getAttribute('rgb'); return v && /^[0-9A-F]{8}$/i.test(v) ? '#' + v.slice(2).toLowerCase() : v && /^[0-9A-F]{6}$/i.test(v) ? '#' + v.toLowerCase() : null; };
+    const on = el => el && el.getAttribute('val') !== '0' && el.getAttribute('val') !== 'false' && el.getAttribute('val') !== 'none';
+    const codes = { 1: '0', 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 14: 'dd/mm/yyyy', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 22: 'm/d/yy h:mm' };
+    for (const n of kids(one(sty, 'numFmts'), 'numFmt')) codes[n.getAttribute('numFmtId')] = n.getAttribute('formatCode');
+    const fonts = kids(one(sty, 'fonts'), 'font').map(f => { const c = rgbOf(kids(f, 'color')[0]); return { b: on(kids(f, 'b')[0]), i: on(kids(f, 'i')[0]), u: on(kids(f, 'u')[0]), color: c && c !== '#000000' ? c : null }; });
+    const fills = kids(one(sty, 'fills'), 'fill').map(f => { const p = kids(f, 'patternFill')[0]; return p && p.getAttribute('patternType') === 'solid' ? rgbOf(kids(p, 'fgColor')[0]) : null; });
+    const borders = kids(one(sty, 'borders'), 'border').map(b => ['left', 'right', 'top', 'bottom'].some(sd => { const e = kids(b, sd)[0]; return e && e.getAttribute('style'); }));
+    const xfs = kids(one(sty, 'cellXfs'), 'xf').map(x => {
+      const f = {}; const fo = fonts[+x.getAttribute('fontId') || 0] || {};
+      if (fo.b) f.b = true; if (fo.i) f.i = true; if (fo.u) f.u = true; if (fo.color) f.color = fo.color;
+      const fi = fills[+x.getAttribute('fillId') || 0]; if (fi && fi !== '#ffffff') f.fill = fi;
+      if (borders[+x.getAttribute('borderId') || 0]) f.bd = true;
+      const al = kids(x, 'alignment')[0]; const ha = al && al.getAttribute('horizontal'); if (/^(left|center|right)$/.test(ha || '')) f.align = ha;
+      const nf = nfFromCode(codes[x.getAttribute('numFmtId')]); if (nf) Object.assign(f, nf);
+      return Object.keys(f).length ? f : null;
+    });
+    const target = {}; for (const r of kids(rels.documentElement, 'Relationship')) target[r.getAttribute('Id')] = r.getAttribute('Target');
+    for (const sh of [...wbx.getElementsByTagNameNS('*', 'sheet')]) {
+      const rid = sh.getAttribute('r:id') || [...sh.attributes].find(a => a.localName === 'id')?.value;
+      let t = target[rid]; if (!t) continue; t = t.replace(/^\//, ''); if (!t.startsWith('xl/')) t = 'xl/' + t;
+      const x = await rd(t); if (!x) continue; const m = new Map();
+      for (const c of [...x.getElementsByTagNameNS('*', 'c')]) { const si = c.getAttribute('s'); if (si == null) continue; const f = xfs[+si]; if (f) m.set(c.getAttribute('r'), f); }
+      out[sh.getAttribute('name')] = m;
+    }
+  } catch (e) { console.warn('formatting not read', e); }
+  return out;
+}
+
 /* Read a workbook keeping every formula, and work out any formula result the file did not save. */
 function xlsxRead(buf, opts = {}) {
   const wb = XLSX.read(buf, { ...opts, cellFormula: true, sheetStubs: true });
@@ -4033,7 +4123,8 @@ const FN_HELP = {
 function mountSheet(view, def) {
   const ROWH = 27, HDRW = 46;
   const st = { name: 'Untitled spreadsheet', sheets: [], active: 0, sel: { r: 0, c: 0, r2: 0, c2: 0 }, undo: [], redo: [], cache: new Map(), editing: null };
-  const newSheet = name => ({ name, cells: new Map(), colW: [], rows: 100, cols: 26 });
+  const newSheet = name => ({ name, cells: new Map(), fmt: new Map(), colW: [], rows: 100, cols: 26 });
+  const snapOf = sh => ({ sheet: st.active, snap: new Map(sh.cells), colW: sh.colW.slice(), fmt: new Map(sh.fmt) });
   const S = () => st.sheets[st.active];
   const key = (r, c) => r + ',' + c;
   // ---------- evaluation ----------
@@ -4072,6 +4163,8 @@ function mountSheet(view, def) {
   function display(sh, r, c) {
     const v = valueAt(sh, r, c), raw = rawOf(sh, r, c);
     if (FX.isErr(v)) return { t: v.e, cls: 'err' };
+    const ft = sh.fmt && sh.fmt.size ? fmtValue(v, sh.fmt.get(key(r, c))) : null;
+    if (ft != null) return { t: ft, cls: typeof v === 'number' ? 'num' : '' };
     if (typeof v === 'number') { if (isDateFormula(raw)) { const d = FX.fromSerial(v); return { t: d.toISOString().slice(0, /NOW/i.test(raw) ? 10 : 10), cls: 'num' }; } return { t: FX.fmtNum(v), cls: 'num' }; }
     if (typeof v === 'boolean') return { t: v ? 'TRUE' : 'FALSE', cls: 'num' };
     return { t: String(v ?? ''), cls: '' };
@@ -4088,10 +4181,10 @@ function mountSheet(view, def) {
     if (record && undo.length) { st.undo.push({ sheet: st.active, ch: undo }); if (st.undo.length > 200) st.undo.shift(); st.redo = []; }
     st.cache.clear(); render(); autosave();
   }
-  function swapSnap(u) { const sh = st.sheets[u.sheet]; const cur = { sheet: u.sheet, snap: new Map(sh.cells), colW: sh.colW.slice() }; sh.cells = new Map(u.snap); sh.colW = u.colW.slice(); return cur; }
+  function swapSnap(u) { const sh = st.sheets[u.sheet]; const cur = { sheet: u.sheet, snap: new Map(sh.cells), colW: sh.colW.slice(), fmt: new Map(sh.fmt) }; sh.cells = new Map(u.snap); sh.colW = u.colW.slice(); if (u.fmt) sh.fmt = new Map(u.fmt); return cur; }
   function undo() { const u = st.undo.pop(); if (!u || !st.sheets[u.sheet]) return; st.active = u.sheet; const sh = S(); if (u.snap) st.redo.push(swapSnap(u)); else { for (const [r, c, b] of u.ch) { if (b === '') sh.cells.delete(key(r, c)); else sh.cells.set(key(r, c), b); } st.redo.push(u); } st.cache.clear(); renderTabs(); render(); autosave(); }
   function redo() { const u = st.redo.pop(); if (!u || !st.sheets[u.sheet]) return; st.active = u.sheet; const sh = S(); if (u.snap) st.undo.push(swapSnap(u)); else { for (const [r, c, , a] of u.ch) { if (a === '') sh.cells.delete(key(r, c)); else sh.cells.set(key(r, c), a); } st.undo.push(u); } st.cache.clear(); renderTabs(); render(); autosave(); }
-  const autosave = debounce(() => { try { lsSet('sheet-draft', { name: st.name, active: st.active, sheets: st.sheets.map(s => ({ name: s.name, colW: s.colW, cells: [...s.cells.entries()] })) }); } catch {} }, 800);
+  const autosave = debounce(() => { try { lsSet('sheet-draft', { name: st.name, active: st.active, sheets: st.sheets.map(s => ({ name: s.name, colW: s.colW, cells: [...s.cells.entries()], fmt: [...s.fmt.entries()] })) }); } catch {} }, 800);
 
   // ---------- UI ----------
   const nameIn = h('input', { class: 'inp', id: 'sh-name', value: st.name, style: { width: '200px', height: '32px' }, 'aria-label': 'Spreadsheet name' }); nameIn.oninput = () => { st.name = nameIn.value || 'Untitled spreadsheet'; autosave(); };
@@ -4103,6 +4196,42 @@ function mountSheet(view, def) {
     btn('Delete row', { kind: 'ghost sm', onclick: () => deleteRows() }), btn('Delete column', { kind: 'ghost sm', onclick: () => deleteCols() }), h('span', { class: 'sep' }),
     T('sortaz', 'Sort A to Z by this column', () => sortBy(1)), T('sortza', 'Sort Z to A by this column', () => sortBy(-1)), T('filldown', 'Fill down (Ctrl+D)', fillDown), T('sum', 'AutoSum', autoSum),
     btn('Functions', { kind: 'ghost sm', onclick: showFunctions }));
+  const curFmt = () => S().fmt.get(key(st.sel.r, st.sel.c)) || {};
+  function applyFmt(fn) {
+    const sh = S(); const { r, c, r2, c2 } = norm(); const u0 = snapOf(sh); const ext = extent(sh);
+    const R2 = Math.min(r2, Math.max(ext.r + 200, r + 500)), C2 = Math.min(c2, Math.max(ext.c + 20, c + 60));
+    for (let i = r; i <= R2; i++) for (let j = c; j <= C2; j++) {
+      const k = key(i, j); const cur = sh.fmt.get(k) || {}; const n = Object.assign({}, cur, fn(cur));
+      for (const x of Object.keys(n)) if (n[x] == null || n[x] === false || n[x] === '') delete n[x];
+      if (Object.keys(n).length) sh.fmt.set(k, n); else sh.fmt.delete(k);
+    }
+    st.undo.push(u0); if (st.undo.length > 200) st.undo.shift(); st.redo = []; render(); autosave(); grid.focus({ preventScroll: true });
+  }
+  const toggleFmt = p => { const v = !curFmt()[p]; applyFmt(() => ({ [p]: v })); };
+  const fB = T('bold', 'Bold (Ctrl+B)', () => toggleFmt('b')), fI = T('italic', 'Italic (Ctrl+I)', () => toggleFmt('i')), fU = T('underline', 'Underline (Ctrl+U)', () => toggleFmt('u'));
+  const colorIn = h('input', { type: 'color', value: '#c00000', title: 'Text colour', 'aria-label': 'Text colour' }); colorIn.addEventListener('change', () => applyFmt(() => ({ color: colorIn.value })));
+  const fillIn = h('input', { type: 'color', value: '#fff2cc', title: 'Fill colour', 'aria-label': 'Fill colour' }); fillIn.addEventListener('change', () => applyFmt(() => ({ fill: fillIn.value })));
+  const nfSel = h('select', { class: 'inp', id: 'sh-nf', title: 'Number format', 'aria-label': 'Number format' }, [['gen', 'General'], ['num', 'Number'], ['gbp', '£ Currency'], ['pct', 'Percent'], ['date', 'Date']].map(([v, l]) => h('option', { value: v }, l)));
+  nfSel.addEventListener('change', () => { const v = nfSel.value; applyFmt(cur => v === 'gen' ? { nf: null, dec: null } : { nf: v, dec: v === 'date' ? null : (cur.nf === v && cur.dec != null ? cur.dec : NF_DEFAULT_DEC(v)) }); });
+  const decBy = d => applyFmt(cur => { const nf = cur.nf && cur.nf !== 'date' ? cur.nf : 'num'; const base = cur.dec ?? NF_DEFAULT_DEC(nf); return { nf, dec: Math.max(0, Math.min(8, base + d)) }; });
+  const fAl = ['left', 'center', 'right'].map(a => T('align' + a[0], 'Align ' + a, () => applyFmt(cur => ({ align: cur.align === a ? null : a })))); const fBd = T('table', 'Borders', () => { const v = !curFmt().bd; applyFmt(() => ({ bd: v })); });
+  tb.append(h('span', { class: 'sep' }), fB, fI, fU, h('label', { class: 'clr', title: 'Text colour' }, 'A', colorIn), h('label', { class: 'clr', title: 'Fill colour' }, 'Fill', fillIn),
+    ...fAl, fBd, h('span', { class: 'sep' }), nfSel, btn('.0−', { kind: 'ghost sm', title: 'Fewer decimals', onclick: () => decBy(-1) }), btn('.0+', { kind: 'ghost sm', title: 'More decimals', onclick: () => decBy(1) }),
+    T('clear', 'Clear formatting', () => applyFmt(() => ({ b: null, i: null, u: null, color: null, fill: null, align: null, nf: null, dec: null, bd: null }))), h('span', { class: 'sep' }), T('find', 'Find and replace (Ctrl+F)', () => findReplace()));
+  /* after using a toolbar button, keyboard shortcuts (Ctrl+Z, Ctrl+B…) keep working straight away, as in Excel */
+  tb.addEventListener('click', e => { if (e.target.closest('button')) setTimeout(() => { if (!document.querySelector('.scrim')) grid.focus({ preventScroll: true }); }, 0); });
+  function syncFmtBar() { const f = curFmt(); fB.classList.toggle('on', !!f.b); fI.classList.toggle('on', !!f.i); fU.classList.toggle('on', !!f.u); fAl.forEach((b, n) => b.classList.toggle('on', f.align === ['left', 'center', 'right'][n])); fBd.classList.toggle('on', !!f.bd); nfSel.value = f.nf || 'gen'; }
+  function findReplace() {
+    const fi = h('input', { class: 'inp', id: 'sh-find', placeholder: 'Find', autocomplete: 'off' }), ri = h('input', { class: 'inp', id: 'sh-repl', placeholder: 'Replace with', autocomplete: 'off' });
+    const msg = h('p', { class: 'note', 'aria-live': 'polite' });
+    const q = () => fi.value.trim().toLowerCase();
+    const hits = () => { const s2 = S(), t = q(); if (!t) return []; return [...s2.cells.keys()].map(k => k.split(',').map(Number)).filter(([r, c]) => String(display(s2, r, c).t).toLowerCase().includes(t) || String(rawOf(s2, r, c)).toLowerCase().includes(t)).sort((a, b) => a[0] - b[0] || a[1] - b[1]); };
+    const next = () => { const l = hits(); if (!l.length) { msg.textContent = 'Not found.'; return false; } let i = l.findIndex(([r, c]) => r > st.sel.r || (r === st.sel.r && c > st.sel.c)); if (i < 0) i = 0; const [r, c] = l[i]; st.sel = { r, c, r2: r, c2: c }; render(); scrollIntoView(r, c); msg.textContent = `${i + 1} of ${l.length}`; return false; };
+    const all = () => { const t = fi.value; if (!t) return false; const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); const ch = []; for (const [k, v] of S().cells) { const sv = String(v); if (re.test(sv)) { re.lastIndex = 0; const [r, c] = k.split(',').map(Number); ch.push([r, c, sv.replace(re, ri.value)]); } re.lastIndex = 0; } if (ch.length) setCells(ch); msg.textContent = ch.length ? `Replaced in ${ch.length} cell${ch.length > 1 ? 's' : ''}.` : 'Not found.'; return false; };
+    fi.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); next(); } });
+    modal({ title: 'Find and replace', body: h('div', { class: 'field' }, h('label', { for: 'sh-find' }, 'Find'), fi, h('label', { for: 'sh-repl' }, 'Replace with'), ri, msg),
+      actions: [{ label: 'Close' }, { label: 'Replace all', onClick: all }, { label: 'Find next', kind: 'primary', onClick: next }] });
+  }
   const addr = h('div', { class: 'addr', 'aria-live': 'polite' }, 'A1');
   const fxIn = h('input', { id: 'sh-fx', 'aria-label': 'Cell contents', placeholder: 'Type a value or a formula such as =SUM(A1:A5)', autocomplete: 'off', spellcheck: 'false' });
   const fxBar = h('div', { class: 'fx' }, addr, h('span', { class: 'fxl' }, 'fx'), fxIn);
@@ -4134,6 +4263,7 @@ function mountSheet(view, def) {
     lastRange = null; paintRows(true);
     addr.textContent = FX.colName(st.sel.c) + (st.sel.r + 1) + (r !== r2 || c !== c2 ? ':' + FX.colName(c2) + (r2 + 1) : '');
     if (document.activeElement !== fxIn) fxIn.value = String(rawOf(sh, st.sel.r, st.sel.c));
+    syncFmtBar();
     // status
     if (r !== r2 || c !== c2) { let s = 0, n = 0, cnt = 0; for (let i = r; i <= Math.min(r2, ext.r); i++) for (let j = c; j <= Math.min(c2, ext.c); j++) { const v = valueAt(sh, i, j); if (v !== '' && v != null) cnt++; if (typeof v === 'number') { s += v; n++; } } statusEl.textContent = n ? `Sum ${FX.fmtNum(+s.toFixed(10))} · Average ${FX.fmtNum(+(s / n).toFixed(10))} · Count ${cnt}` : `Count ${cnt}`; }
     else statusEl.textContent = ext.r >= 0 ? `${ext.r + 1} rows · ${ext.c + 1} columns` : '';
@@ -4154,6 +4284,9 @@ function mountSheet(view, def) {
         const td = document.createElement('td'); td.dataset.r = i; td.dataset.c = j;
         let cls = d.cls; if (i >= r && i <= r2 && j >= c && j <= c2 && (r !== r2 || c !== c2)) cls += ' insel'; if (i === st.sel.r && j === st.sel.c) cls += ' act';
         if (cls) td.className = cls.trim(); if (d.t) { td.textContent = d.t; if (d.t.length > 12) td.title = d.t; }
+        const fm = sh.fmt.size ? sh.fmt.get(key(i, j)) : null;
+        if (fm) { const y = td.style; if (fm.b) y.fontWeight = '700'; if (fm.i) y.fontStyle = 'italic'; if (fm.u) y.textDecoration = 'underline'; if (fm.color) y.color = fm.color; if (fm.align) y.textAlign = fm.align;
+          if (fm.fill) { td.classList.add('hasfill'); y.setProperty('--fill', fm.fill); } if (fm.bd) td.classList.add('bd'); }
         tr.append(td);
       }
       frag.append(tr);
@@ -4233,6 +4366,10 @@ function mountSheet(view, def) {
     else if (k === 'Home') { e.preventDefault(); move(0, -st.sel.c); }
     else if (k === 'F2') { e.preventDefault(); startEdit(null); }
     else if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); clearSel(); }
+    else if (mod && k.toLowerCase() === 'b') { e.preventDefault(); toggleFmt('b'); }
+    else if (mod && k.toLowerCase() === 'i') { e.preventDefault(); toggleFmt('i'); }
+    else if (mod && k.toLowerCase() === 'u') { e.preventDefault(); toggleFmt('u'); }
+    else if (mod && (k.toLowerCase() === 'f' || k.toLowerCase() === 'h')) { e.preventDefault(); findReplace(); }
     else if (mod && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     else if (mod && k.toLowerCase() === 'y') { e.preventDefault(); redo(); }
     else if (mod && k.toLowerCase() === 'd') { e.preventDefault(); fillDown(); }
@@ -4261,10 +4398,10 @@ function mountSheet(view, def) {
   function selTSVFrom(raws, clip) { const sh = st.sheets[clip.sheet]; const { r, c, r2, c2 } = clip.sel; const out = []; for (let i = r; i <= r2; i++) { const row = []; for (let j = c; j <= c2; j++) row.push(display(sh, i, j).t); out.push(row.join('\t')); } return out.join('\n'); }
   // ---------- operations ----------
   function remap(fn, colFn) {
-    const sh = S(); st.undo.push({ sheet: st.active, snap: new Map(sh.cells), colW: sh.colW.slice() }); st.redo = [];
+    const sh = S(); st.undo.push(snapOf(sh)); st.redo = [];
     if (colFn) colFn(sh.colW);
-    const next = new Map(); for (const [k, v] of sh.cells) { const [r, c] = k.split(',').map(Number); const nk = fn(r, c); if (nk) next.set(key(nk[0], nk[1]), v); }
-    sh.cells = next; st.cache.clear(); render(); autosave();
+    const move = m => { const next = new Map(); for (const [k, v] of m) { const [r, c] = k.split(',').map(Number); const nk = fn(r, c); if (nk) next.set(key(nk[0], nk[1]), v); } return next; };
+    sh.cells = move(sh.cells); sh.fmt = move(sh.fmt); st.cache.clear(); render(); autosave();
   }
   function insertRow(at) { remap((r, c) => [r >= at ? r + 1 : r, c]); }
   function insertCol(at) { remap((r, c) => [r, c >= at ? c + 1 : c], w => w.splice(at, 0, 100)); }
@@ -4274,12 +4411,15 @@ function mountSheet(view, def) {
     const sh = S(); const ext = extent(sh); if (ext.r < 1) return; const col = st.sel.c;
     const hasHeader = typeof valueAt(sh, 0, col) === 'string' && typeof valueAt(sh, 1, col) !== 'string' || (typeof valueAt(sh, 0, col) === 'string' && [...Array(Math.min(ext.c + 1, 8)).keys()].every(j => typeof valueAt(sh, 0, j) === 'string' || valueAt(sh, 0, j) === ''));
     const start = hasHeader ? 1 : 0;
-    const rows = []; for (let i = start; i <= ext.r; i++) { const row = []; for (let j = 0; j <= ext.c; j++) row.push(rawOf(sh, i, j)); rows.push({ row, v: valueAt(sh, i, col) }); }
+    const rows = []; for (let i = start; i <= ext.r; i++) { const row = [], fr = []; for (let j = 0; j <= ext.c; j++) { row.push(rawOf(sh, i, j)); fr.push(sh.fmt.get(key(i, j)) || null); } rows.push({ row, fr, v: valueAt(sh, i, col) }); }
     rows.sort((a, b) => { const x = a.v, y = b.v; if (x === '' && y !== '') return 1; if (y === '' && x !== '') return -1; if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir; return String(x).localeCompare(String(y), undefined, { numeric: true }) * dir; });
-    const ch = []; rows.forEach((o, i) => o.row.forEach((v, j) => ch.push([start + i, j, v]))); setCells(ch);
+    const u0 = snapOf(sh); const ch = []; rows.forEach((o, i) => o.row.forEach((v, j) => ch.push([start + i, j, v])));
+    rows.forEach((o, i) => o.fr.forEach((f, j) => { const k = key(start + i, j); if (f) sh.fmt.set(k, f); else sh.fmt.delete(k); }));
+    setCells(ch, { record: false }); st.undo.push(u0); st.redo = [];
     toast(`Sorted by column ${FX.colName(col)}${hasHeader ? ' (header row kept)' : ''}`);
   }
-  function fillDown() { const { r, c, r2, c2 } = norm(); if (r === r2) { toast('Select the cell to copy and the cells below it.'); return; } const ch = []; for (let j = c; j <= c2; j++) { const src = rawOf(S(), r, j); for (let i = r + 1; i <= r2; i++) ch.push([i, j, typeof src === 'string' && src.startsWith('=') ? '=' + FX.shift(src.slice(1), i - r, 0) : src]); } setCells(ch); }
+  function fillDown() { const { r, c, r2, c2 } = norm(); if (r === r2) { toast('Select the cell to copy and the cells below it.'); return; } const ch = [];
+    { const sh = S(); const u0 = snapOf(sh); let any = false; for (let j = c; j <= c2; j++) { const f = sh.fmt.get(key(r, j)); for (let i = r + 1; i <= r2; i++) { const k = key(i, j); if (f) { sh.fmt.set(k, f); any = true; } else if (sh.fmt.delete(k)) any = true; } } if (any) { st.undo.push(u0); st.redo = []; } } for (let j = c; j <= c2; j++) { const src = rawOf(S(), r, j); for (let i = r + 1; i <= r2; i++) ch.push([i, j, typeof src === 'string' && src.startsWith('=') ? '=' + FX.shift(src.slice(1), i - r, 0) : src]); } setCells(ch); }
   function autoSum() {
     const sh = S(); const { r, c } = st.sel; let top = r - 1; while (top >= 0 && typeof valueAt(sh, top, c) === 'number') top--;
     if (top === r - 1) { let left = c - 1; while (left >= 0 && typeof valueAt(sh, r, left) === 'number') left--; if (left === c - 1) { startEdit('=SUM('); return; } setCells([[r, c, `=SUM(${FX.colName(left + 1)}${r + 1}:${FX.colName(c - 1)}${r + 1})`]]); return; }
@@ -4297,7 +4437,9 @@ function mountSheet(view, def) {
     const f = files[0]; if (!f) return;
     await withBusy('Opening ' + f.name, async () => {
       await need('xlsx');
-      const wb = xlsxRead(await f.arrayBuffer(), { type: 'array', cellDates: true });
+      const buf = await f.arrayBuffer();
+      const wb = xlsxRead(buf, { type: 'array', cellDates: true });
+      const fmts = /^xls[xm]$/i.test(extOf(f.name)) ? await xlsxFormats(buf) : {};
       st.sheets = wb.SheetNames.map(n => {
         const ws = wb.Sheets[n]; const sh = newSheet(n); if (!ws['!ref']) return sh;
         const rg = XLSX.utils.decode_range(ws['!ref']);
@@ -4313,6 +4455,8 @@ function mountSheet(view, def) {
           if (v !== '' && v != null) sh.cells.set(key(r, c), v);
         }
         if (ws['!cols']) ws['!cols'].forEach((cw, i) => { if (cw && (cw.wpx || cw.wch)) sh.colW[i] = Math.round(cw.wpx || cw.wch * 7.5); });
+        const fm = fmts[n]; if (fm) for (const [a, f] of fm) { const { r, c } = XLSX.utils.decode_cell(a); if (r <= 20000 && c <= 200) sh.fmt.set(key(r, c), f); }
+        else for (let r = rg.s.r; r <= Math.min(rg.e.r, 20000); r++) for (let c = rg.s.c; c <= Math.min(rg.e.c, 200); c++) { const cell = ws[XLSX.utils.encode_cell({ r, c })]; const nf = cell && cell.z && nfFromCode(cell.z); if (nf) sh.fmt.set(key(r, c), nf); }
         return sh;
       });
       if (!st.sheets.length) st.sheets = [newSheet('Sheet1')];
@@ -4333,7 +4477,14 @@ function mountSheet(view, def) {
         else if (typeof v === 'boolean') ws[a] = { t: 'b', v };
         else { const ser = toSerial(String(v)); ws[a] = ser != null ? { t: 'n', v: ser, z: 'yyyy-mm-dd' } : { t: 's', v: String(v) }; }
       }
-      ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, ext.r), c: Math.max(0, ext.c) } });
+      let er = ext.r, ec = ext.c;
+      for (const [k, f] of sh.fmt) {
+        const [r, c] = k.split(',').map(Number); const a = XLSX.utils.encode_cell({ r, c });
+        if (!ws[a]) { if (!f.fill && !f.bd) continue; ws[a] = { t: 's', v: '' }; }
+        const sx = xsStyle(f); if (sx) ws[a].s = sx; const z = nfCode(f); if (z) ws[a].z = z;
+        if (r > er) er = r; if (c > ec) ec = c;
+      }
+      ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, er), c: Math.max(0, ec) } });
       ws['!cols'] = Array.from({ length: Math.max(1, ext.c + 1) }, (_, i) => ({ wpx: colW(i) }));
       XLSX.utils.book_append_sheet(wb, ws, sh.name.slice(0, 31));
     }
@@ -4345,7 +4496,8 @@ function mountSheet(view, def) {
       await withBusy('Preparing ' + fmt.toUpperCase(), async () => {
         const nm = safeName(st.name);
         const wb = await buildWb();
-        if (fmt === 'xlsx') await saveFile(new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nm + '.xlsx');
+        if (fmt === 'xlsx') { let W = XLSX; if (st.sheets.some(x => x.fmt.size)) { try { await need('xstyle'); W = window.XLSXS || XLSX; } catch (e) { toast('Formatting could not be added this time; the values and formulas are saved.', 'bad'); } }
+          await saveFile(new Blob([W.write(wb, { type: 'array', bookType: 'xlsx', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nm + '.xlsx'); }
         else if (fmt === 'csv') await saveFile(new Blob(['﻿' + XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[st.active]])], { type: 'text/csv' }), nm + (st.sheets.length > 1 ? '-' + S().name : '') + '.csv');
         else if (fmt === 'pdf') { const doc = await sheetsToPdf(wb, wb.SheetNames, { title: st.name }); await savePdfDoc(doc, nm + '.pdf'); }
       });
@@ -4392,18 +4544,21 @@ function mountSheet(view, def) {
   }
   // ---------- initial state ----------
   const draft = lsGet('sheet-draft', null);
-  if (draft && draft.sheets && draft.sheets.length) { st.sheets = draft.sheets.map(s => Object.assign(newSheet(s.name), { colW: s.colW || [], cells: new Map(s.cells) })); st.name = draft.name || st.name; st.active = Math.min(draft.active || 0, st.sheets.length - 1); nameIn.value = st.name; }
+  if (draft && draft.sheets && draft.sheets.length) { st.sheets = draft.sheets.map(s => Object.assign(newSheet(s.name), { colW: s.colW || [], cells: new Map(s.cells), fmt: new Map(s.fmt || []) })); st.name = draft.name || st.name; st.active = Math.min(draft.active || 0, st.sheets.length - 1); nameIn.value = st.name; }
   else {
     const sh = newSheet('Budget'); st.sheets = [sh];
     const rows = [['Item', 'Qty', 'Unit price', 'Total'], ['Coffee beans (kg)', 4, 18.5, '=B2*C2'], ['Milk (litres)', 24, 0.95, '=B3*C3'], ['Paper cups (box)', 3, 22, '=B4*C4'], ['Pastries', 60, 1.1, '=B5*C5'], ['', '', 'Total', '=SUM(D2:D5)'], ['', '', 'Average', '=AVERAGE(D2:D5)']];
     rows.forEach((r, i) => r.forEach((v, c) => { if (v !== '') sh.cells.set(key(i, c), v); }));
+    for (let c = 0; c < 4; c++) sh.fmt.set(key(0, c), { b: true, fill: '#e6e9fb', bd: true });
+    for (let r = 1; r <= 6; r++) for (const c of [2, 3]) if (r <= 4 || c === 3) sh.fmt.set(key(r, c), { nf: 'gbp', dec: 2 });
+    sh.fmt.set(key(5, 2), { b: true }); sh.fmt.set(key(5, 3), { b: true, nf: 'gbp', dec: 2 });
     sh.colW = [170, 70, 100, 100];
   }
   renderTabs(); render();
   return { load, show: () => { render(); } };
 }
 
-tool({ id: 'sheet-editor', cat: 'office', cls: 'c-xls', glyph: 'XLSX', icon: 'table', name: 'Excel editor', desc: NO_AI ? 'Spreadsheets with formulas and sorting' : 'Spreadsheets with formulas, sorting and AI', kw: 'excel spreadsheet xlsx csv sheet edit formulas sum table budget calculate ai', accepts: ['sheet'], mount: mountSheet });
+tool({ id: 'sheet-editor', cat: 'office', cls: 'c-xls', glyph: 'XLSX', icon: 'table', name: 'Spreadsheet editor', desc: NO_AI ? 'Like Excel: formulas, formatting, £ and %, sorting, find and replace' : 'Spreadsheets with formulas, sorting and AI', kw: 'excel spreadsheet xlsx csv sheet edit formulas sum table budget calculate ai', accepts: ['sheet'], mount: mountSheet });
 
 /* ================= Image tools ================= */
 const IMG_MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
