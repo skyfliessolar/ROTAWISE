@@ -1,5 +1,12 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Sheaf Document Studio</title>
+<script>
+/* Sheaf lives inside Rotawise (Documents). Opened on its own it goes to Rotawise's Documents section.
+   Add ?standalone=1 to the address to open it by itself. */
+(function(){var inside=false;try{inside=window.parent!==window&&window.parent.location.origin===location.origin}catch(e){}
+  if(inside)document.documentElement.classList.add('embed');
+  else if(!/[?&]standalone=1/.test(location.search)&&!/^(localhost|127\.)/.test(location.hostname)&&location.protocol!=='file:')location.replace(new URL('../#docs',location.href).href);})();
+</script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,6 +63,15 @@ a{color:var(--accent)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 .no-ai .btn.ai,.no-ai .ai-pill,.no-ai .aipanel{display:none!important}
+/* inside Rotawise: no second app header or welcome banner */
+.embed .topbar .brand{display:none}
+.embed .topbar{padding-block:8px}
+.embed .search{max-width:none;margin-left:0}
+.embed .hub{padding-block:16px 40px}
+.embed .hero{grid-template-columns:minmax(0,1fr)}
+.embed .hero-copy{display:none}
+.embed .desk-drop{min-height:170px}
+.embed body::before{display:none}
 
 /* App frame */
 #app{height:100%;display:flex;flex-direction:column}
@@ -1645,7 +1661,7 @@ const CATS = [
   { id: 'secure', name: 'Protect', sub: 'Passwords, watermarks, numbering', cls: 'c-lock' },
   { id: 'ai', name: 'AI', sub: 'Ask, summarise, translate and read scans', cls: 'c-ai' },
 ];
-function tool(def) { if (NO_AI && def.cat === 'ai') return def; TOOLS.push(def); TOOLMAP[def.id] = def; return def; }
+function tool(def) { if (NO_AI && def.cat === 'ai') return def; if (def.id === 'edit-any') TOOLS.unshift(def); else TOOLS.push(def); TOOLMAP[def.id] = def; return def; }
 if (NO_AI) CATS.splice(CATS.findIndex(c => c.id === 'ai'), 1);
 const views = {}; const instances = {}; const pending = {};
 
@@ -1724,12 +1740,12 @@ function wireSearch() {
 /* ---------- Smart router for dropped files ---------- */
 const SUGGEST = {
   pdf: ['edit-pdf', 'sign-pdf', 'compress-pdf', 'organize-pdf', 'merge-pdf', 'split-pdf', 'pdf-to-word', 'pdf-to-excel', 'pdf-to-jpg', 'pdf-to-text', 'protect-pdf', 'unlock-pdf', 'watermark-pdf', 'number-pdf', 'ai-chat', 'ai-ocr', 'ai-translate'],
-  word: ['word-editor', 'word-to-pdf', 'compress-all', 'ai-chat', 'ai-translate'],
+  word: ['word-editor', 'merge-word', 'merge-pdf', 'word-to-pdf', 'compress-all', 'ai-chat', 'ai-translate'],
   'doc-old': ['compress-all'],
-  sheet: ['sheet-editor', 'excel-to-pdf', 'compress-all', 'ai-chat'],
-  image: ['image-editor', 'compress-image', 'resize-image', 'convert-image', 'jpg-to-pdf', 'ai-ocr', 'ai-chat'],
+  sheet: ['sheet-editor', 'excel-to-pdf', 'merge-pdf', 'compress-all', 'ai-chat'],
+  image: ['image-editor', 'combine-images', 'compress-image', 'resize-image', 'convert-image', 'jpg-to-pdf', 'merge-pdf', 'ai-ocr', 'ai-chat'],
   svg: ['convert-image', 'jpg-to-pdf'],
-  text: ['text-to-pdf', 'word-editor', 'ai-chat', 'ai-translate'],
+  text: ['word-editor', 'text-to-pdf', 'merge-word', 'merge-pdf', 'ai-chat', 'ai-translate'],
   slides: ['compress-all'],
   other: ['compress-all'],
 };
@@ -1743,8 +1759,9 @@ function renderStaging() {
   const kinds = [...new Set(staged.map(kindOf))];
   let ids;
   if (kinds.length === 1) ids = SUGGEST[kinds[0]] || ['compress-all'];
-  else if (kinds.every(k => k === 'pdf' || k === 'image')) ids = ['merge-pdf', 'jpg-to-pdf', 'compress-all'];
-  else ids = ['compress-all', 'ai-chat'];
+  else if (kinds.every(k => k === 'pdf' || k === 'image')) ids = ['merge-pdf', 'merge-word', 'jpg-to-pdf', 'compress-all'];
+  else if (kinds.every(k => k === 'image')) ids = ['combine-images', 'jpg-to-pdf', 'compress-image'];
+  else ids = ['merge-pdf', 'merge-word', 'compress-all', 'ai-chat'];
   if (staged.length > 1 && kinds[0] === 'pdf' && kinds.length === 1) ids = ['merge-pdf', ...ids.filter(i => i !== 'merge-pdf')];
   const box = h('div', { class: 'staging' },
     h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('h3', null, staged.length === 1 ? 'What should happen to this file?' : `What should happen to these ${staged.length} files?`), btn('Clear', { kind: 'ghost sm', icon: 'x', onclick: () => { staged = []; renderHub(); } })),
@@ -2442,16 +2459,58 @@ const thumbQ = { running: 0, q: [] };
 function queueThumb(fn) { return new Promise((res, rej) => { thumbQ.q.push({ fn, res, rej }); pumpThumbs(); }); }
 function pumpThumbs() { while (thumbQ.running < 2 && thumbQ.q.length) { const j = thumbQ.q.shift(); thumbQ.running++; j.fn().then(j.res, j.rej).finally(() => { thumbQ.running--; pumpThumbs(); }); } }
 
+/* Turn a Word, text or spreadsheet file into PDF pages (so any page can be merged) and keep its content
+   as blocks (so a merge can also be saved as an editable Word document). */
+async function docToPages(f, k) {
+  const e = extOf(f.name), title = baseName(f.name);
+  let pdfDoc, blocks;
+  if (k === 'word') {
+    const html = await docxToHtml(f);
+    pdfDoc = (await htmlToPdfAuto(html, { title })).doc;
+    const box = h('div', { class: 'paper', html }); await prepImages(box); blocks = htmlToBlocks(box);
+  } else if (k === 'sheet') {
+    await need('xlsx');
+    const wb = xlsxRead(await f.arrayBuffer(), { type: 'array', cellDates: true });
+    pdfDoc = await sheetsToPdf(wb, wb.SheetNames, { title });
+    const box = h('div', { html: wb.SheetNames.map(n => (wb.SheetNames.length > 1 ? '<h2>' + esc(n) + '</h2>' : '') + XLSX.utils.sheet_to_html(wb.Sheets[n], { header: '', footer: '' })).join('') });
+    blocks = htmlToBlocks(box);
+  } else {
+    const txt = await f.text();
+    if (/^html?$/.test(e)) { const box = h('div', { class: 'paper', html: sanitizeHtml(txt) }); await prepImages(box); blocks = htmlToBlocks(box); }
+    else blocks = mdToBlocks(txt, { plain: !(e === 'md' || e === 'markdown') });
+    pdfDoc = await blocksToPdf(blocks, { title, fontSize: 11 });
+  }
+  const bytes = new Uint8Array(await pdfDoc.save());
+  return { doc: await openPdf({ name: f.name }, { bytes }), blocks };
+}
+/* One PDF page as editable blocks (text, tables, pictures). */
+async function pageBlocks(d, index) {
+  const page = await d.pdf.getPage(index + 1);
+  const bs = linesToBlocks(await pageLines(page));
+  for (const im of await pageImages(page)) {
+    const ib = { type: 'img', mime: 'image/png', bytes: im.png, w: im.drawW, h: im.drawH, y: im.y };
+    const at = bs.findIndex(b => b.y != null && b.y > im.y);
+    if (at < 0) bs.push(ib); else bs.splice(at, 0, ib);
+  }
+  return bs;
+}
+
 /* ================= Organize / merge ================= */
 const SRC_TAGS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function mountOrganize(view, def, mode = 'organize') {
   const st = { srcs: [], pages: [], sel: new Set() };
-  const saveBtn = btn(mode === 'merge' ? 'Merge & download' : 'Save PDF', { kind: 'primary', icon: 'download', onclick: () => exportPdf(false) });
-  const addBtn = btn('Add files', { kind: 'ghost', icon: 'plus', onclick: async () => { const fs = await pickFiles({ accept: accepts(['pdf', 'image']), multiple: true }); if (fs.length) load(fs); } });
-  saveBtn.hidden = addBtn.hidden = true;
-  const { body } = toolPage(view, def, [addBtn, saveBtn]);
+  const isMerge = mode === 'merge' || mode === 'merge-word', toWord = mode === 'merge-word';
+  const ACC = isMerge ? accepts(['pdf', 'image', 'word', 'text', 'sheet']) : accepts(['pdf', 'image']);
+  const saveBtn = btn(toWord ? 'As PDF' : mode === 'merge' ? 'Merge & download' : 'Save PDF', { kind: toWord ? 'ghost' : 'primary', icon: 'download', onclick: () => exportPdf(false) });
+  const wordBtn = btn(toWord ? 'Merge & download Word' : 'As Word', { kind: toWord ? 'primary' : 'ghost', icon: 'doc', onclick: () => exportDoc('docx') });
+  const txtBtn = btn('As text', { kind: 'ghost', icon: 'text', onclick: () => exportDoc('txt') });
+  const addBtn = btn('Add files', { kind: 'ghost', icon: 'plus', onclick: async () => { const fs = await pickFiles({ accept: ACC, multiple: true }); if (fs.length) load(fs); } });
+  const acts = isMerge ? (toWord ? [addBtn, txtBtn, saveBtn, wordBtn] : [addBtn, txtBtn, wordBtn, saveBtn]) : [addBtn, saveBtn];
+  const showActs = on => acts.forEach(a => a.hidden = !on);
+  showActs(false);
+  const { body } = toolPage(view, def, acts);
   body.classList.replace('narrow', 'wide');
-  const dz = dropzone({ title: mode === 'merge' ? 'Choose PDFs to merge' : 'Choose a PDF to organize', sub: mode === 'merge' ? 'Add PDFs and images, put the pages in order, then merge them into one file.' : 'Reorder, rotate, delete, duplicate and insert pages. You can add more PDFs or images too.', accept: accepts(['pdf', 'image']), multiple: true, cat: 'c-pdf', label: 'PDF', ic: mode === 'merge' ? 'merge' : 'pages', onFiles: load });
+  const dz = dropzone({ title: isMerge ? 'Choose files to merge' : 'Choose a PDF to organize', sub: isMerge ? 'PDF, Word, text, Excel and images, in any mix. Every page appears below, so you can keep any page from any file, in any order.' : 'Reorder, rotate, delete, duplicate and insert pages. You can add more PDFs or images too.', accept: ACC, multiple: true, cat: toWord ? 'c-doc' : 'c-pdf', label: toWord ? 'DOCX' : 'PDF', ic: isMerge ? 'merge' : 'pages', onFiles: load });
   const srcRow = h('div', { class: 'staging-files' });
   const info = h('span', { class: 'note' });
   const tb = h('div', { class: 'row' },
@@ -2466,6 +2525,57 @@ function mountOrganize(view, def, mode = 'organize') {
   const work = h('div', { class: 'card' }, h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('h3', null, 'Pages'), h('span', { class: 'note' }, 'Drag pages to reorder. On a phone, press and hold, then drag.')), srcRow, tb, grid);
   work.hidden = true;
   body.append(dz, work);
+  if (isMerge) {
+    const qi = h('input', { class: 'inp', id: 'mg-order-' + mode, placeholder: 'e.g. A2, B1-3, A1, C', autocomplete: 'off' });
+    qi.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); applyOrder(qi.value); } });
+    work.insertBefore(h('div', { class: 'field' }, h('label', { for: 'mg-order-' + mode }, 'Pick pages by typing (optional)'),
+      h('div', { class: 'row' }, h('div', { style: { flex: '1', minWidth: '200px' } }, qi), btn('Use this order', { kind: 'sm', onclick: () => applyOrder(qi.value) })),
+      h('span', { class: 'note' }, 'Use the file letters shown on the pages. A2, B1-3 means page 2 of file A, then pages 1 to 3 of file B. A letter on its own takes all its pages, and + adds a blank page.')), grid);
+  }
+  function applyOrder(str) {
+    const toks = String(str).toUpperCase().split(/[\s,;]+/).filter(Boolean);
+    if (!toks.length) { toast('Type an order such as A2, B1-3.', 'bad'); return; }
+    const out = [];
+    for (const t of toks) {
+      if (t === '+' || t === 'BLANK') { out.push({ id: uid(), blank: true, rot: 0 }); continue; }
+      const m = /^([A-Z])(\d+)?(-)?(\d+)?$/.exec(t);
+      if (!m) { toast('“' + t + '” is not understood. Use a letter and page numbers, like A2 or B1-3.', 'bad'); return; }
+      const src = st.srcs.find(x => x.tag === m[1]);
+      if (!src) { toast('There is no file ' + m[1] + '. The files are ' + st.srcs.map(x => x.tag).join(', ') + '.', 'bad'); return; }
+      const n = src.kind === 'pdf' ? src.doc.pdf.numPages : 1;
+      const a = m[2] ? +m[2] : 1, z = m[4] ? +m[4] : (m[3] || !m[2] ? n : a);
+      if (a < 1 || a > n || z < 1 || z > n) { toast(`File ${m[1]} has ${n} page${n > 1 ? 's' : ''}.`, 'bad'); return; }
+      const step = a <= z ? 1 : -1;
+      for (let i = a; ; i += step) { out.push({ id: uid(), src, index: i - 1, rot: 0 }); if (i === z) break; }
+    }
+    st.pages = out; st.sel.clear(); renderGrid(); toast(out.length + ' page' + (out.length > 1 ? 's' : '') + ' in your order');
+  }
+  async function exportDoc(fmt) {
+    const list = st.pages;
+    if (!list.length) { toast('There are no pages to save.', 'bad'); return; }
+    await withBusy(fmt === 'docx' ? 'Building Word document' : 'Building text file', async b => {
+      const blocks = [];
+      for (let i = 0; i < list.length;) {
+        const p = list[i]; let bs = [], used = 1;
+        if (p.blank) bs = [];
+        else if (p.src.kind === 'pdf') {
+          const n = p.src.doc.pdf.numPages; let whole = !!p.src.blocks && list.length - i >= n;
+          for (let j = 0; whole && j < n; j++) { const q = list[i + j]; if (q.blank || q.src !== p.src || q.index !== j) whole = false; }
+          if (whole) { bs = p.src.blocks; used = n; }       // a whole Word or text file: keep its original content
+          else bs = await pageBlocks(p.src.doc, p.index);
+        } else {
+          const im = await imageForPdf(p.src.file, { maxDim: 1600, quality: 0.86 });
+          bs = [{ type: 'img', mime: im.type === 'png' ? 'image/png' : 'image/jpeg', bytes: im.bytes, w: im.w * 0.75, h: im.h * 0.75 }];
+        }
+        if (blocks.length) blocks.push({ type: 'pagebreak' });
+        blocks.push(...bs); i += used;
+        await b.set(`Page ${Math.min(i, list.length)} of ${list.length}`, i / list.length);
+      }
+      const nm = st.srcs.length > 1 ? 'merged' : baseName(st.srcs[0].name);
+      if (fmt === 'docx') await saveFile(await blocksToDocx(blocks, { title: nm }), nm + '.docx');
+      else await saveFile(new Blob([blocksText(blocks)], { type: 'text/plain' }), nm + '.txt');
+    });
+  }
 
   async function load(files) {
     await withBusy('Reading files', async b => {
@@ -2481,16 +2591,23 @@ function mountOrganize(view, def, mode = 'organize') {
         } else if (k === 'image' || k === 'svg') {
           const src = { id: uid(), tag, name: f.name, kind: 'image', file: f };
           st.srcs.push(src); st.pages.push({ id: uid(), src, index: 0, rot: 0 });
-        } else toast('Skipped ' + f.name + ': only PDFs and images can be pages.', 'bad');
+        } else if (isMerge && (k === 'word' || k === 'text' || k === 'sheet')) {
+          await b.set('Converting ' + f.name, i / files.length);
+          const cv = await docToPages(f, k);
+          const src = { id: uid(), tag, name: f.name, kind: 'pdf', orig: k, doc: cv.doc, blocks: cv.blocks };
+          st.srcs.push(src);
+          for (let n = 0; n < cv.doc.pdf.numPages; n++) st.pages.push({ id: uid(), src, index: n, rot: 0 });
+        } else if (k === 'doc-old') toast('Skipped ' + f.name + ': old .doc files cannot be read. Save it as .docx in Word first.', 'bad');
+        else toast('Skipped ' + f.name + (isMerge ? ': this kind of file cannot be merged.' : ': only PDFs and images can be pages.'), 'bad');
       }
     });
-    dz.hidden = st.srcs.length > 0; work.hidden = !st.srcs.length; saveBtn.hidden = addBtn.hidden = !st.srcs.length;
+    dz.hidden = st.srcs.length > 0; work.hidden = !st.srcs.length; showActs(st.srcs.length > 0);
     renderSrcs(); renderGrid();
   }
   function renderSrcs() {
     srcRow.innerHTML = '';
-    for (const s of st.srcs) srcRow.append(h('span', { class: 'chip' }, h('span', { class: 'ftag', style: '--c:var(--ink)' }, s.tag), h('span', { class: 'nm' }, s.name), h('span', { class: 'sz' }, s.kind === 'pdf' ? s.doc.pdf.numPages + ' p' : 'image'),
-      h('button', { type: 'button', title: 'Remove file', html: icon('x'), onclick: () => { st.pages = st.pages.filter(p => p.src !== s); st.srcs = st.srcs.filter(x => x !== s); renderSrcs(); renderGrid(); if (!st.srcs.length) { dz.hidden = false; work.hidden = true; saveBtn.hidden = addBtn.hidden = true; } } })));
+    for (const s of st.srcs) srcRow.append(h('span', { class: 'chip' }, h('span', { class: 'ftag', style: '--c:var(--ink)' }, s.tag), h('span', { class: 'nm' }, s.name), h('span', { class: 'sz' }, s.kind === 'pdf' ? s.doc.pdf.numPages + ' p' + (s.orig ? ' · ' + ({ word: 'Word', text: 'text', sheet: 'Excel' })[s.orig] : '') : 'image'),
+      h('button', { type: 'button', title: 'Remove file', html: icon('x'), onclick: () => { st.pages = st.pages.filter(p => p.src !== s); st.srcs = st.srcs.filter(x => x !== s); renderSrcs(); renderGrid(); if (!st.srcs.length) { dz.hidden = false; work.hidden = true; showActs(false); } } })));
   }
   function thumbFor(p) {
     if (p.thumb) return p.thumb;
@@ -2601,6 +2718,110 @@ function mountOrganize(view, def, mode = 'organize') {
     });
   }
   return { load };
+}
+
+/* ================= Combine images into one picture ================= */
+function mountCombine(view, def) {
+  const st = { items: [], layout: 'vertical', cols: 2, gap: 10, bg: '#ffffff', width: 1800, fmt: 'jpg' };
+  const dlBtn = btn('Download', { kind: 'primary', icon: 'download', onclick: () => save() });
+  const addBtn = btn('Add images', { kind: 'ghost', icon: 'plus', onclick: async () => { const fs = await pickFiles({ accept: accepts(['image']), multiple: true }); if (fs.length) load(fs); } });
+  dlBtn.hidden = addBtn.hidden = true;
+  const { body } = toolPage(view, def, [addBtn, dlBtn]);
+  const dz = dropzone({ title: 'Choose images to combine', sub: 'Put photos side by side, one under another, or in a grid, as one picture.', accept: accepts(['image']), multiple: true, cat: 'c-img', label: 'IMG', ic: 'image', onFiles: load });
+  const card = h('div', { class: 'card' }); card.hidden = true;
+  const prev = h('div', { class: 'preview-sheet', style: { background: 'transparent', boxShadow: 'none' } });
+  body.append(dz, card);
+  async function load(files) {
+    await withBusy('Reading images', async b => {
+      let i = 0;
+      for (const f of files) { i++; await b.set(f.name, i / files.length); try { const bm = await decodeImage(f); const { w, h: hh } = drawableSize(bm); st.items.push({ id: uid(), f, bm, w, h: hh }); } catch (e) { toast('Could not read ' + f.name, 'bad'); } }
+    });
+    const any = st.items.length > 0; dz.hidden = any; card.hidden = !any; dlBtn.hidden = addBtn.hidden = !any; render();
+  }
+  function layoutBoxes(W) {
+    const g = st.gap, it = st.items; const boxes = []; let H = 0, Wt = W;
+    if (!it.length) return { boxes, W: 1, H: 1 };
+    if (st.layout === 'vertical') { let y = 0; for (const x of it) { const hh = Math.round(x.h * W / x.w); boxes.push({ x: 0, y, w: W, h: hh, it: x }); y += hh + g; } H = y - g; }
+    else if (st.layout === 'horizontal') {
+      const rh = Math.min(...it.map(x => x.h)); const ws = it.map(x => x.w * rh / x.h); const total = ws.reduce((a, b) => a + b, 0) + g * (it.length - 1); const k = W / total;
+      let x0 = 0; it.forEach((x, i) => { const w = Math.round(ws[i] * k); boxes.push({ x: Math.round(x0), y: 0, w, h: Math.round(rh * k), it: x }); x0 += ws[i] * k + g * k; });
+      H = Math.round(rh * k); Wt = W;
+    } else {
+      const c = Math.max(1, Math.min(st.cols, it.length)); const cw = (W - g * (c - 1)) / c; let y = 0;
+      for (let r = 0; r * c < it.length; r++) {
+        const row = it.slice(r * c, r * c + c); const rh = Math.max(...row.map(x => x.h * cw / x.w));
+        row.forEach((x, j) => { const w = cw, hh = x.h * cw / x.w; boxes.push({ x: Math.round(j * (cw + g)), y: Math.round(y + (rh - hh) / 2), w: Math.round(w), h: Math.round(hh), it: x }); });
+        y += rh + g;
+      }
+      H = Math.round(y - g);
+    }
+    return { boxes, W: Wt, H: Math.max(1, H) };
+  }
+  function compose(W) {
+    const L = layoutBoxes(W); let k = 1; const MAX = 16000, AREA = 60e6;
+    if (L.H > MAX || L.W * L.H > AREA) k = Math.min(MAX / L.H, Math.sqrt(AREA / (L.W * L.H)));
+    const cv = h('canvas', { width: Math.max(1, Math.round(L.W * k)), height: Math.max(1, Math.round(L.H * k)) }); const cx = cv.getContext('2d');
+    if (st.fmt !== 'png' || st.bg !== 'transparent') { cx.fillStyle = st.bg === 'transparent' ? '#ffffff' : st.bg; cx.fillRect(0, 0, cv.width, cv.height); }
+    cx.imageSmoothingQuality = 'high';
+    for (const b of L.boxes) cx.drawImage(b.it.bm, b.x * k, b.y * k, b.w * k, b.h * k);
+    return cv;
+  }
+  function render() {
+    card.innerHTML = '';
+    const list = h('div', { class: 'flist' }, st.items.map((x, i) => h('div', { class: 'fitem' },
+      h('div', { class: 'thumb' }, (() => { const c = h('canvas', { width: 88, height: 88 }); const s = Math.min(88 / x.w, 88 / x.h); c.getContext('2d').drawImage(x.bm, (88 - x.w * s) / 2, (88 - x.h * s) / 2, x.w * s, x.h * s); return c; })()),
+      h('div', { class: 'meta' }, h('b', null, (i + 1) + '. ' + x.f.name), h('span', null, x.w + ' × ' + x.h)),
+      h('div', { class: 'acts' }, ibtn('back', 'Move earlier', () => { if (i > 0) { [st.items[i - 1], st.items[i]] = [st.items[i], st.items[i - 1]]; render(); } }),
+        ibtn('x', 'Remove', () => { st.items.splice(i, 1); if (!st.items.length) { dz.hidden = false; card.hidden = true; dlBtn.hidden = addBtn.hidden = true; } else render(); })))));
+    const seg = (opts, val, set) => h('div', { class: 'seg' }, opts.map(([k, l]) => { const b = h('button', { type: 'button', class: val === k ? 'on' : '' }, l); b.onclick = () => { set(k); render(); }; return b; }));
+    const gapI = h('input', { type: 'range', id: 'cb-gap', min: 0, max: 60, step: 2, value: st.gap }); const gapO = h('output', null, st.gap + ' px'); gapI.oninput = () => { st.gap = +gapI.value; gapO.textContent = st.gap + ' px'; paint(); };
+    const colsI = h('input', { class: 'inp', id: 'cb-cols', type: 'number', min: 1, max: 10, value: st.cols, style: { width: '80px' } }); colsI.oninput = () => { st.cols = Math.max(1, Math.min(10, +colsI.value || 1)); paint(); };
+    const wI = h('input', { class: 'inp', id: 'cb-w', type: 'number', min: 200, max: 8000, step: 100, value: st.width, style: { width: '110px' } }); wI.oninput = () => { st.width = Math.max(200, Math.min(8000, +wI.value || 1800)); paint(); };
+    const bgs = ['#ffffff', '#000000', '#EEF1F6', 'transparent'];
+    card.append(h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('h3', null, st.items.length + ' image' + (st.items.length > 1 ? 's' : '')), h('span', { class: 'note', id: 'cb-size' })), list,
+      h('div', { class: 'field' }, h('span', { class: 'lbl' }, 'Layout'), seg([['vertical', 'One under another'], ['horizontal', 'Side by side'], ['grid', 'Grid']], st.layout, v => st.layout = v)),
+      st.layout === 'grid' ? h('div', { class: 'row' }, h('label', { for: 'cb-cols', class: 'lbl' }, 'Pictures per row'), colsI) : null,
+      h('div', { class: 'sl' }, h('label', { for: 'cb-gap' }, 'Space between'), gapI, gapO),
+      h('div', { class: 'row' }, h('span', { class: 'lbl' }, 'Background'), h('div', { class: 'swatches' }, bgs.map(c => { const b = h('button', { type: 'button', class: 'sw' + (st.bg === c ? ' on' : ''), title: c === 'transparent' ? 'See-through (PNG)' : c, style: { background: c === 'transparent' ? 'repeating-conic-gradient(#ccc 0 25%,#fff 0 50%) 0 0/10px 10px' : c } }); b.onclick = () => { st.bg = c; if (c === 'transparent') st.fmt = 'png'; render(); }; return b; }))),
+      h('div', { class: 'row' }, h('label', { for: 'cb-w', class: 'lbl' }, 'Width'), wI, h('span', { class: 'note' }, 'pixels'), h('span', { class: 'lbl', style: { marginLeft: '12px' } }, 'Save as'), seg([['jpg', 'JPG'], ['png', 'PNG']], st.fmt, v => { st.fmt = v; if (v === 'jpg' && st.bg === 'transparent') st.bg = '#ffffff'; })),
+      prev);
+    paint();
+  }
+  const paint = debounce(() => { if (!st.items.length) return; const L = layoutBoxes(st.width); const sz = $('#cb-size', card); if (sz) sz.textContent = 'Result: ' + Math.round(L.W) + ' × ' + Math.round(L.H) + ' px';
+    const W = Math.min(900, st.width); const cv = compose(W); cv.style.maxWidth = '100%'; cv.style.height = 'auto'; cv.style.maxHeight = '70vh'; cv.style.objectFit = 'contain'; prev.replaceChildren(cv); }, 60);
+  async function save() {
+    if (!st.items.length) return;
+    await withBusy('Combining images', async () => {
+      const cv = compose(st.width);
+      const blob = await canvasBlob(cv, st.fmt === 'png' ? 'image/png' : 'image/jpeg', 0.9);
+      await saveFile(blob, 'combined.' + (st.fmt === 'png' ? 'png' : 'jpg'));
+    });
+  }
+  return { load };
+}
+
+/* ================= Edit any file ================= */
+function mountEditAny(view, def) {
+  const { body } = toolPage(view, def);
+  body.append(dropzone({ title: 'Choose any file to edit', sub: 'PDF, Word, text, spreadsheets and pictures. Sheaf opens it in the right editor.', accept: accepts(['pdf', 'word', 'text', 'sheet', 'image']), cat: 'c-doc', label: 'EDIT', ic: 'edit', onFiles: open }),
+    h('div', { class: 'card' }, h('h3', null, 'What opens where'),
+      h('dl', { class: 'kv' }, h('dt', null, 'PDF'), h('dd', null, 'Edit on the page, or edit as a document like Word'), h('dt', null, 'Word, text'), h('dd', null, 'Word editor'),
+        h('dt', null, 'Excel, CSV'), h('dd', null, 'Spreadsheet editor'), h('dt', null, 'Pictures'), h('dd', null, 'Image editor'))));
+  async function open(files) {
+    const f = files[0]; if (!f) return; const k = kindOf(f);
+    if (k === 'pdf') {
+      const opt = (title, sub, cls, g, id) => h('button', { type: 'button', class: 'tool ' + cls, onclick: () => { m.close(); go(id, [f]); } }, fglyph(cls, g), h('div', null, h('b', null, title), h('span', null, sub)));
+      const m = modal({ title: 'How do you want to edit this PDF?', body: h('div', { class: 'suggest' },
+        opt('Edit on the page', 'Keeps the exact look. Change words, add text, sign, highlight, fill forms.', 'c-pdf', 'PDF', 'edit-pdf'),
+        opt('Edit as a document', 'Text flows like Word, so you can rewrite freely. Save as PDF or Word.', 'c-doc', 'DOCX', 'word-editor')), actions: [{ label: 'Cancel' }] });
+    }
+    else if (k === 'word' || k === 'text') go('word-editor', [f]);
+    else if (k === 'sheet') go('sheet-editor', [f]);
+    else if (k === 'image' || k === 'svg') go('image-editor', [f]);
+    else if (k === 'doc-old') toast('Old .doc files cannot be opened. Save it as .docx in Word first.', 'bad');
+    else toast('This kind of file cannot be edited here.', 'bad');
+  }
+  return { load: open };
 }
 
 /* ================= Split ================= */
@@ -2962,8 +3183,11 @@ function mountStamp(view, def, kind) {
 }
 
 tool({ id: 'organize-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'pages', name: 'Organize pages', desc: 'Reorder, rotate, delete, duplicate and insert pages', kw: 'organize reorder sort rotate delete remove pages arrange insert blank duplicate', accepts: ['pdf', 'image'], multi: true, mount: (v, d) => mountOrganize(v, d, 'organize') });
-tool({ id: 'merge-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'merge', name: 'Merge PDF', desc: 'Combine PDFs and images into one file', kw: 'merge combine join append pdf together', accepts: ['pdf', 'image'], multi: true, mount: (v, d) => mountOrganize(v, d, 'merge') });
+tool({ id: 'merge-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'merge', name: 'Merge files', desc: 'PDF, Word, text, Excel and images into one, with any pages in any order', kw: 'merge combine join append pdf together word docx text excel images pages mix', accepts: ['pdf', 'image', 'word', 'text', 'sheet'], multi: true, mount: (v, d) => mountOrganize(v, d, 'merge') });
 tool({ id: 'split-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'split', name: 'Split PDF', desc: 'Pull out pages or cut a PDF into parts', kw: 'split extract separate pages cut divide', accepts: ['pdf'], mount: mountSplit });
+tool({ id: 'merge-word', cat: 'office', cls: 'c-doc', glyph: 'DOCX', icon: 'merge', name: 'Merge into Word', desc: 'Word, PDF, text, Excel and images into one editable .docx', kw: 'merge word docx combine join documents text editable', accepts: ['pdf', 'image', 'word', 'text', 'sheet'], multi: true, mount: (v, d) => mountOrganize(v, d, 'merge-word') });
+tool({ id: 'combine-images', cat: 'image', cls: 'c-img', glyph: 'IMG', icon: 'pages', name: 'Combine images', desc: 'Join photos side by side, stacked or in a grid, as one picture', kw: 'merge combine join stitch collage images photos side by side grid one picture', accepts: ['image'], multi: true, mount: mountCombine });
+tool({ id: 'edit-any', cat: 'office', cls: 'c-doc', glyph: 'EDIT', icon: 'edit', name: 'Edit any file', desc: 'Open a PDF, Word, text, spreadsheet or picture in the right editor', kw: 'edit open any file document pdf word text excel picture editor all in one', accepts: ['pdf', 'word', 'text', 'sheet', 'image'], mount: mountEditAny });
 tool({ id: 'rotate-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'rotate', name: 'Rotate PDF', desc: 'Turn some or all pages the right way up', kw: 'rotate turn landscape portrait upside', accepts: ['pdf'], hidden: false, mount: (v, d) => mountOrganize(v, d, 'organize') });
 tool({ id: 'compress-pdf', cat: 'compress', cls: 'c-zip', glyph: 'PDF', icon: 'compress', name: 'Compress PDF', desc: 'Shrink PDFs while keeping text sharp', kw: 'compress reduce shrink smaller pdf size email optimise optimize', accepts: ['pdf'], multi: true, mount: mountCompressPdf });
 tool({ id: 'protect-pdf', cat: 'secure', cls: 'c-lock', glyph: 'PDF', icon: 'lock', name: 'Lock PDF with password', desc: 'Encrypt a PDF so it needs a password', kw: 'protect password encrypt lock secure', accepts: ['pdf'], mount: mountProtect });

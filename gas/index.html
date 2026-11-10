@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Rotawise — Gas Deliveries</title>
+<script>
+/* Gas lives inside Rotawise. Opened on its own (old bookmark, phone icon, email link) it goes to Rotawise's Gas section.
+   Add ?standalone=1 to the address to open it by itself. */
+(function(){var inside=false;try{inside=window.parent!==window&&window.parent.location.origin===location.origin}catch(e){}
+  if(inside)document.documentElement.classList.add('embed');
+  else if(!/[?&]standalone=1/.test(location.search)&&!/^(localhost|127\.)/.test(location.hostname)&&location.protocol!=='file:')location.replace(new URL('../#gas',location.href).href);})();
+</script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -46,6 +53,21 @@ a{color:inherit}
 .me{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.18);white-space:nowrap}
 @media (max-width:480px){.pill b{display:none}.pill{padding:6px}}
 .dnav{display:none;gap:2px;margin-left:14px}
+/* inside Rotawise: no second app header, just this section's tabs */
+.embed body{padding-bottom:16px}
+.embed .top{background:var(--card);color:var(--ink);padding:6px 12px;border-bottom:1px solid var(--line)}
+.embed .top .brand{display:none}
+.embed .dnav{display:flex!important;margin-left:0;overflow-x:auto;scrollbar-width:none;flex:0 1 auto;min-width:0}
+.embed .dnav::-webkit-scrollbar{display:none}
+.embed .dnav button{color:var(--ink);opacity:.7;padding:7px 11px}
+.embed .dnav button.on{background:var(--soft);color:var(--ink);opacity:1}
+.embed .me{background:var(--soft);color:var(--ink)}
+.embed .pill{background:var(--soft);color:var(--ink)}
+.embed .bnav{display:none!important}
+.embed .fab{bottom:16px!important}
+.embed main{padding-top:12px}
+@media (max-width:600px){.embed .top .me,.embed .top .pill b{display:none}.embed .top{padding:4px 6px}}
+.embed .center>p.small{display:none}
 .dnav button{background:none;border:0;color:var(--navink);opacity:.75;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap}
 .dnav button.on{opacity:1;background:#fff;color:var(--ink)}
 .dnav .cnt,.bnav .cnt{background:var(--bad);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;margin-left:4px}
