@@ -962,6 +962,318 @@ async function openPdf(file, { bytes } = {}) {
     }
   }
 }
+/* ================= Remove words under a whiteout =================
+   A whiteout used to only cover the words beneath it: they stayed in the file, so they could still be
+   copied, searched or read out. Before saving, Sheaf now goes into the page's drawing instructions and
+   takes out every letter that sits completely under a whiteout. The letters around them keep their exact
+   positions (a removed run is swapped for a gap of the same width). Then the page is drawn before and
+   after, and if anything outside the whiteouts looks different by even a few dots, the page is put back
+   the way it was and the words are only covered, as before. */
+const PdfErase = (() => {
+  const WS = new Uint8Array(256); [0, 9, 10, 12, 13, 32].forEach(c => WS[c] = 1);
+  const DL = new Uint8Array(256); '()<>[]{}/%'.split('').forEach(ch => DL[ch.charCodeAt(0)] = 1);
+  const OPERAND_KW = { true: 1, false: 1, null: 1 };
+
+  /* Content stream (a latin1 string) -> list of operators with their operands and where they are. */
+  function parse(s) {
+    const n = s.length; let i = 0; const ops = []; let args = [], a0 = -1;
+    const skip = () => {
+      for (;;) {
+        while (i < n && WS[s.charCodeAt(i)]) i++;
+        if (s[i] === '%') { while (i < n && s[i] !== '\n' && s[i] !== '\r') i++; } else return;
+      }
+    };
+    const value = () => {
+      const c = s[i];
+      if (c === '(') {
+        i++; let depth = 1; const out = [];
+        while (i < n) {
+          const ch = s[i++];
+          if (ch === '\\') {
+            const e = s[i++];
+            if (e === 'n') out.push(10); else if (e === 'r') out.push(13); else if (e === 't') out.push(9);
+            else if (e === 'b') out.push(8); else if (e === 'f') out.push(12);
+            else if (e >= '0' && e <= '7') { let o = e; for (let k = 0; k < 2 && s[i] >= '0' && s[i] <= '7'; k++) o += s[i++]; out.push(parseInt(o, 8) & 255); }
+            else if (e === '\r') { if (s[i] === '\n') i++; }
+            else if (e === '\n') { /* line continuation */ }
+            else if (e !== undefined) out.push(e.charCodeAt(0) & 255);
+          } else if (ch === '(') { depth++; out.push(40); }
+          else if (ch === ')') { if (--depth === 0) break; out.push(41); }
+          else out.push(ch.charCodeAt(0) & 255);
+        }
+        return { str: out };
+      }
+      if (c === '<') {
+        if (s[i + 1] === '<') {
+          i += 2; const d = {};
+          for (;;) { skip(); if (i >= n) break; if (s[i] === '>' && s[i + 1] === '>') { i += 2; break; } const k = value(); skip(); if (i >= n) break; const v = value(); if (k && k.name != null) d[k.name] = v; }
+          return { dict: d };
+        }
+        i++; let hex = '';
+        while (i < n && s[i] !== '>') { const ch = s[i++]; if (/[0-9a-fA-F]/.test(ch)) hex += ch; }
+        i++; if (hex.length % 2) hex += '0';
+        const out = []; for (let k = 0; k < hex.length; k += 2) out.push(parseInt(hex.substr(k, 2), 16));
+        return { str: out };
+      }
+      if (c === '[') { i++; const a = []; for (;;) { skip(); if (i >= n) break; if (s[i] === ']') { i++; break; } a.push(value()); } return { arr: a }; }
+      if (c === '/') {
+        i++; let nm = '';
+        while (i < n && !WS[s.charCodeAt(i)] && !DL[s.charCodeAt(i)]) nm += s[i++];
+        return { name: nm.replace(/#([0-9a-fA-F]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16))) };
+      }
+      if (DL[s.charCodeAt(i)]) { i++; return { kw: c }; }
+      let w = ''; while (i < n && !WS[s.charCodeAt(i)] && !DL[s.charCodeAt(i)]) w += s[i++];
+      if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(w)) return { num: parseFloat(w) };
+      return { kw: w };
+    };
+    while (true) {
+      skip(); if (i >= n) break;
+      const at = i; const v = value();
+      if (v.kw != null && !OPERAND_KW[v.kw]) {
+        const op = { op: v.kw, args, s: a0 < 0 ? at : a0, e: i };
+        if (v.kw === 'BI') {
+          // inline image: settings up to ID, then raw data up to EI
+          for (;;) { skip(); if (i >= n) break; const t = value(); if (t.kw === 'ID') break; }
+          i++; let j = i;
+          for (;;) {
+            j = s.indexOf('EI', j); if (j < 0) { j = n; break; }
+            const b = s.charCodeAt(j - 1), af = j + 2 < n ? s.charCodeAt(j + 2) : 32;
+            if (WS[b] && (WS[af] || DL[af])) break; j += 2;
+          }
+          i = Math.min(n, j + 2); op.op = 'BI…EI'; op.e = i;
+        }
+        ops.push(op); args = []; a0 = -1;
+      } else { if (a0 < 0) a0 = at; args.push(v); }
+    }
+    return ops;
+  }
+
+  const mul = (a, b) => [a[0] * b[0] + a[1] * b[2], a[0] * b[1] + a[1] * b[3], a[2] * b[0] + a[3] * b[2], a[2] * b[1] + a[3] * b[3], a[4] * b[0] + a[5] * b[2] + b[4], a[4] * b[1] + a[5] * b[3] + b[5]];
+  const pt = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+  const num = v => v && typeof v.num === 'number' ? v.num : 0;
+  const fmt = v => { const r = +(+v).toFixed(4); return Object.is(r, -0) ? '0' : String(r); };
+  const hex = bytes => '<' + bytes.map(b => (b < 16 ? '0' : '') + b.toString(16)).join('') + '>';
+
+  /* Walk the operators, follow where every letter lands, and rewrite the text operators that have
+     letters fully inside one of the boxes (boxes are [x0, y0, x1, y1] in the page's own units). */
+  function rewrite(src, getFont, boxes, tol = 1.2) {
+    const ops = parse(src);
+    let gs = { ctm: [1, 0, 0, 1, 0, 0], Tc: 0, Tw: 0, Th: 1, TL: 0, Tfs: 0, font: null, Ts: 0 };
+    const stack = []; let Tm = [1, 0, 0, 1, 0, 0], Tlm = [1, 0, 0, 1, 0, 0], known = true;
+    const edits = []; let removed = 0, removedText = [], unsupported = 0;
+    const inside = (m, w0) => {
+      // letter outline: x 0..w0, y -0.18..0.7 in letter units, through the text and page matrices
+      const c = [[0, -0.18], [w0, -0.18], [0, 0.7], [w0, 0.7]].map(([x, y]) => pt(m, x, y));
+      const xs = c.map(p => p[0]), ys = c.map(p => p[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      return boxes.some(b => x0 >= b[0] - tol && x1 <= b[2] + tol && y0 >= b[1] - tol && y1 <= b[3] + tol);
+    };
+    const td = (tx, ty) => { Tlm = mul([1, 0, 0, 1, tx, ty], Tlm); Tm = Tlm.slice(); known = true; };
+    // show a list of strings and numbers; returns the new TJ array text, or null if nothing changes
+    const show = items => {
+      const f = gs.font, Tfs = gs.Tfs, Th = gs.Th;
+      if (!f || !known || !Tfs || !Th) { known = false; if (!f) unsupported++; return null; }
+      const out = []; let changed = false, gap = 0, keep = [];
+      const flushKeep = () => { if (keep.length) { out.push({ s: keep }); keep = []; } };
+      const flushGap = () => { if (gap) { out.push({ n: -gap * 1000 / (Tfs * Th) }); gap = 0; } };
+      for (const it of items) {
+        if (it.num != null) {
+          const tx = -(it.num / 1000) * Tfs * Th; Tm = mul([1, 0, 0, 1, tx, 0], Tm);
+          if (gap) gap += tx; else { flushKeep(); out.push({ n: it.num }); }
+          continue;
+        }
+        if (!it.str) continue;
+        const b = it.str, step = f.bytes || 1;
+        for (let k = 0; k < b.length; k += step) {
+          const code = step === 2 ? (b[k] << 8) | (b[k + 1] || 0) : b[k];
+          const glyph = step === 2 ? [b[k], b[k + 1] || 0] : [b[k]];
+          const w0 = (f.width(code) || 0) / 1000;
+          const Trm = mul([Tfs * Th, 0, 0, Tfs, 0, gs.Ts], mul(Tm, gs.ctm));
+          const tx = (w0 * Tfs + gs.Tc + (step === 1 && code === 32 ? gs.Tw : 0)) * Th;
+          if (inside(Trm, w0 || 0.5)) { flushKeep(); gap += tx; changed = true; removed++; removedText.push(code); }
+          else { flushGap(); keep.push(...glyph); }
+          Tm = mul([1, 0, 0, 1, tx, 0], Tm);
+        }
+      }
+      flushGap(); flushKeep();
+      if (!changed) return null;
+      return '[' + out.map(o => o.s ? hex(o.s) : fmt(o.n)).join(' ') + '] TJ';
+    };
+    for (const o of ops) {
+      const a = o.args, op = o.op;
+      switch (op) {
+        case 'q': stack.push(gs); gs = { ...gs, ctm: gs.ctm.slice() }; break;
+        case 'Q': if (stack.length) gs = stack.pop(); break;
+        case 'cm': if (a.length >= 6) gs.ctm = mul(a.slice(0, 6).map(num), gs.ctm); break;
+        case 'BT': Tm = [1, 0, 0, 1, 0, 0]; Tlm = [1, 0, 0, 1, 0, 0]; known = true; break;
+        case 'Tc': gs.Tc = num(a[0]); break;
+        case 'Tw': gs.Tw = num(a[0]); break;
+        case 'Tz': gs.Th = num(a[0]) / 100; break;
+        case 'TL': gs.TL = num(a[0]); break;
+        case 'Ts': gs.Ts = num(a[0]); break;
+        case 'Tf': gs.font = a[0] && a[0].name != null ? getFont(a[0].name) : null; gs.Tfs = num(a[1]); break;
+        case 'Td': td(num(a[0]), num(a[1])); break;
+        case 'TD': gs.TL = -num(a[1]); td(num(a[0]), num(a[1])); break;
+        case 'Tm': if (a.length >= 6) { Tlm = a.slice(0, 6).map(num); Tm = Tlm.slice(); known = true; } break;
+        case 'T*': td(0, -gs.TL); break;
+        case 'Tj': { const r = show([a[0] || {}]); if (r) edits.push({ s: o.s, e: o.e, t: r }); break; }
+        case 'TJ': { const r = show((a[0] && a[0].arr) || []); if (r) edits.push({ s: o.s, e: o.e, t: r }); break; }
+        case "'": { td(0, -gs.TL); const r = show([a[0] || {}]); if (r) edits.push({ s: o.s, e: o.e, t: 'T* ' + r }); break; }
+        case '"': {
+          gs.Tw = num(a[0]); gs.Tc = num(a[1]); td(0, -gs.TL);
+          const r = show([a[2] || {}]); if (r) edits.push({ s: o.s, e: o.e, t: fmt(gs.Tw) + ' Tw ' + fmt(gs.Tc) + ' Tc T* ' + r });
+          break;
+        }
+      }
+    }
+    if (!edits.length) return { out: src, removed: 0, unsupported };
+    let out = '', at = 0;
+    for (const e of edits) { out += src.slice(at, e.s) + e.t; at = e.e; }
+    out += src.slice(at);
+    return { out, removed, removedCodes: removedText, unsupported };
+  }
+
+  /* Letter widths for a font in the page's resources, or null when Sheaf can't be sure of them. */
+  const STD = { helvetica: 'Helvetica', arial: 'Helvetica', arialmt: 'Helvetica', times: 'Times-Roman', timesroman: 'Times-Roman', timesnewroman: 'Times-Roman', timesnewromanps: 'Times-Roman', timesnewromanpsmt: 'Times-Roman', courier: 'Courier', couriernew: 'Courier', couriernewpsmt: 'Courier', symbol: 'Symbol', zapfdingbats: 'ZapfDingbats' };
+  function stdName(base) {
+    const b = String(base || '').replace(/^[A-Z]{6}\+/, '');
+    const m = /^([^,-]+)(?:[,-](.*))?$/.exec(b); if (!m) return null;
+    const fam = STD[m[1].toLowerCase().replace(/[^a-z]/g, '')]; if (!fam) return null;
+    if (fam === 'Symbol' || fam === 'ZapfDingbats') return fam;
+    const st = (m[2] || '').toLowerCase(); const bold = /bold|black|heavy/.test(st), it = /italic|oblique/.test(st);
+    if (fam === 'Times-Roman') return bold && it ? 'Times-BoldItalic' : bold ? 'Times-Bold' : it ? 'Times-Italic' : 'Times-Roman';
+    return fam + (bold && it ? '-BoldOblique' : bold ? '-Bold' : it ? '-Oblique' : '');
+  }
+  function fontReader(L, resources) {
+    const N = k => L.PDFName.of(k), cache = {};
+    const fonts = resources && resources.lookupMaybe ? resources.lookupMaybe(N('Font'), L.PDFDict) : null;
+    const n = x => (x instanceof L.PDFNumber ? x.asNumber() : 0);
+    const nm = x => (x instanceof L.PDFName ? x.decodeText() : '');
+    return name => {
+      if (name in cache) return cache[name];
+      let r = null;
+      try {
+        const f = fonts && fonts.lookupMaybe(N(name), L.PDFDict);
+        if (f) {
+          const sub = nm(f.lookup(N('Subtype')));
+          if (sub === 'Type0') {
+            const enc = nm(f.lookup(N('Encoding')));
+            const dfs = f.lookupMaybe(N('DescendantFonts'), L.PDFArray); const df = dfs && dfs.lookupMaybe(0, L.PDFDict);
+            if (enc === 'Identity-H' && df) {
+              const dw = df.has(N('DW')) ? n(df.lookup(N('DW'))) : 1000, W = df.lookupMaybe(N('W'), L.PDFArray), map = new Map();
+              if (W) for (let k = 0; k < W.size();) {
+                const c1 = n(W.lookup(k)), nx = W.lookup(k + 1);
+                if (nx instanceof L.PDFArray) { for (let j = 0; j < nx.size(); j++) map.set(c1 + j, n(nx.lookup(j))); k += 2; }
+                else { const c2 = n(nx), w = n(W.lookup(k + 2)); if (c2 - c1 < 70000) for (let c = c1; c <= c2; c++) map.set(c, w); k += 3; }
+              }
+              r = { bytes: 2, width: c => (map.has(c) ? map.get(c) : dw) };
+            }
+          } else if (sub === 'Type1' || sub === 'TrueType' || sub === 'MMType1') {
+            const fc = f.has(N('FirstChar')) ? n(f.lookup(N('FirstChar'))) : 0;
+            const Wa = f.lookupMaybe(N('Widths'), L.PDFArray);
+            const fd = f.lookupMaybe(N('FontDescriptor'), L.PDFDict);
+            const miss = fd && fd.has(N('MissingWidth')) ? n(fd.lookup(N('MissingWidth'))) : 0;
+            if (Wa) { const ws = []; for (let k = 0; k < Wa.size(); k++) ws.push(n(Wa.lookup(k))); r = { bytes: 1, width: c => (c >= fc && c - fc < ws.length ? ws[c - fc] : miss) }; }
+            else {
+              const std = stdName(nm(f.lookup(N('BaseFont'))));
+              if (std && L.StandardFontEmbedder) {
+                const emb = L.StandardFontEmbedder.for(std); const names = [];
+                for (const v of Object.values(emb.encoding.unicodeMappings || {})) if (Array.isArray(v)) names[v[0]] = v[1];
+                const enc = f.lookup(N('Encoding'));
+                if (enc instanceof L.PDFDict) {
+                  const d = enc.lookupMaybe(N('Differences'), L.PDFArray); let c = 0;
+                  if (d) for (let k = 0; k < d.size(); k++) { const x = d.lookup(k); if (x instanceof L.PDFNumber) c = x.asNumber(); else if (x instanceof L.PDFName) names[c++] = x.decodeText(); }
+                }
+                r = { bytes: 1, width: c => (names[c] && emb.font.getWidthOfGlyph(names[c])) || 0 };
+              }
+            }
+          }
+        }
+      } catch (e) { r = null; }
+      return (cache[name] = r);
+    };
+  }
+
+  const latin1 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 32768) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768)); return s; };
+  const toBytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255; return b; };
+
+  /* Read a page's drawing instructions as one string (several streams are joined). */
+  function readContents(L, doc, node) {
+    const c = node.get(L.PDFName.of('Contents')); if (!c) return null;
+    const v = doc.context.lookup(c); const list = [];
+    if (v instanceof L.PDFArray) { for (let k = 0; k < v.size(); k++) list.push(v.lookup(k)); } else list.push(v);
+    const parts = [];
+    for (const sobj of list) {
+      if (!sobj) continue;
+      if (sobj instanceof L.PDFRawStream) parts.push(latin1(L.decodePDFRawStream(sobj).decode()));
+      else if (sobj.getUnencodedContents) parts.push(latin1(sobj.getUnencodedContents()));
+      else return null;
+    }
+    return { ref: c, src: parts.join('\n') };
+  }
+
+  /* Draw a page into grey levels for comparing. */
+  async function paint(page, scale) {
+    const vp = page.getViewport({ scale });
+    const cv = document.createElement('canvas'); cv.width = Math.ceil(vp.width); cv.height = Math.ceil(vp.height);
+    const cx = cv.getContext('2d', { willReadFrequently: true });
+    await page.render({ canvasContext: cx, viewport: vp, annotationMode: pdfjsLib.AnnotationMode.DISABLE }).promise;
+    return { vp, w: cv.width, h: cv.height, data: cx.getImageData(0, 0, cv.width, cv.height).data };
+  }
+
+  /* Only this one page, on its own, for drawing it again after the change. */
+  async function soloPage(L, doc, index) {
+    const node = doc.getPages()[index].node, AN = L.PDFName.of('Annots'), ann = node.get(AN);
+    if (ann) node.delete(AN);
+    let bytes;
+    try {
+      const d2 = await L.PDFDocument.create(); const [cp] = await d2.copyPages(doc, [index]); d2.addPage(cp);
+      bytes = await d2.save({ useObjectStreams: false, updateFieldAppearances: false });
+    } finally { if (ann) node.set(AN, ann); }
+    return bytes;
+  }
+
+  /* Take out the words under the boxes on one page and check nothing else moved.
+     origPage is the page as pdf.js shows it now; boxes are in the page's own units. */
+  async function erasePage(L, doc, index, origPage, boxes) {
+    const pg = doc.getPages()[index]; if (!pg) return { removed: 0 };
+    const node = pg.node;
+    const res = node.normalizedEntries().Resources; // also turns Contents into a list, as pdf-lib expects later
+    const cur = readContents(L, doc, node); if (!cur) return { removed: 0 };
+    const r = rewrite(cur.src, fontReader(L, res), boxes);
+    if (!r.removed) return { removed: 0 };
+    const NC = L.PDFName.of('Contents');
+    node.set(NC, doc.context.obj([doc.context.register(doc.context.flateStream(toBytes(r.out)))]));
+    let ok = false, why = '';
+    try {
+      const bytes = await soloPage(L, doc, index);
+      const pdf2 = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false, useSystemFonts: true, verbosity: 0 }).promise;
+      try {
+        const p2 = await pdf2.getPage(1);
+        const v0 = origPage.getViewport({ scale: 1 });
+        const scale = Math.min(1.5, 1600 / Math.max(v0.width, v0.height));
+        const A = await paint(origPage, scale), B = await paint(p2, scale);
+        if (A.w !== B.w || A.h !== B.h) why = 'size';
+        else {
+          const m = 2.5 * scale; // a small margin round each box
+          const rects = boxes.map(b => { const p = A.vp.convertToViewportPoint(b[0], b[1]), q = A.vp.convertToViewportPoint(b[2], b[3]); return [Math.min(p[0], q[0]) - m, Math.min(p[1], q[1]) - m, Math.max(p[0], q[0]) + m, Math.max(p[1], q[1]) + m]; });
+          let diff = 0;
+          for (let y = 0; y < A.h && diff <= 6; y++) for (let x = 0; x < A.w; x++) {
+            const k = (y * A.w + x) * 4, d = Math.max(Math.abs(A.data[k] - B.data[k]), Math.abs(A.data[k + 1] - B.data[k + 1]), Math.abs(A.data[k + 2] - B.data[k + 2]));
+            if (d > 48 && !rects.some(R => x >= R[0] && x <= R[2] && y >= R[1] && y <= R[3])) { if (++diff > 6) break; }
+          }
+          ok = diff <= 6; if (!ok) why = 'looks different';
+        }
+      } finally { pdf2.destroy(); }
+    } catch (e) { why = e.message; }
+    if (!ok) { node.set(NC, cur.ref); console.warn('Sheaf: kept page ' + (index + 1) + ' as it was (' + why + '); the words there are covered, not removed.'); return { removed: 0, kept: true }; }
+    return { removed: r.removed };
+  }
+
+  return { parse, rewrite, fontReader, readContents, erasePage, stdName };
+})();
+
+
 async function loadPdfLib(bytes, password) {
   await need('pdflib');
   const opts = { ignoreEncryption: true, updateMetadata: false };
@@ -2257,7 +2569,7 @@ function mountEditor(view, def, mode = 'edit') {
             else { cur = { x: it.x, r: it.x + it.w, y: it.y, size: it.size, text: it.str, items: [it], font: it.font, style: it.style }; segs.push(cur); }
           }
         }
-        p.titems = segs.map(sg => { const el = h('div', { class: 'titem', title: 'Click to edit this text' }); el.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); editSegment(p, sg, el); }); p.layer.append(el); return { sg, el }; });
+        p.titems = segs.map(sg => { const el = h('div', { class: 'titem', title: 'Click to edit this text', 'aria-label': 'Edit text: ' + sg.text.trim() }); el.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); editSegment(p, sg, el); }); p.layer.append(el); return { sg, el }; });
       }
       p.titems.forEach(t => t.el.hidden = !!t.sg.used);
       placeTextItems(p);
@@ -2269,7 +2581,7 @@ function mountEditor(view, def, mode = 'edit') {
     const b = { x: sg.x - 1, y: sg.y - sg.size * 0.88, w: sg.r - sg.x + 2, h: sg.size * 1.16 };
     const bg = sampleBg(p, b); const ink = sampleInk(p, b, bg);
     const fam = (sg.style && sg.style.fontFamily) || ''; const real = fontRealName(p.page, sg.font);
-    const font = /mono|courier/i.test(fam + real) ? 'Courier' : /serif/i.test(fam) && !/sans/i.test(fam) || /times|roman|georgia|garamond|minion|cambria/i.test(real) ? 'Times' : 'Helvetica';
+    const font = /mono|courier/i.test(fam + real) ? 'Courier' : /serif/i.test(fam) && !/sans/i.test(fam) || /serif/i.test(real) && !/sans/i.test(real) || /times|roman|georgia|garamond|minion|cambria|caladea|tinos|palatino|baskerville|bookman|century|bodoni|charter|constantia|merriweather|lora/i.test(real) ? 'Times' : 'Helvetica';
     pushUndo();
     const wo = { id: uid(), type: 'whiteout', x: b.x, y: b.y, w: b.w, h: b.h, fill: bg }; p.objs.push(wo); placeObj(wo, p);
     const size = Math.round(sg.size * 10) / 10;
@@ -2315,7 +2627,7 @@ function mountEditor(view, def, mode = 'edit') {
       if ((o && ['rect', 'ellipse'].includes(o.type)) || (!o && ['rect', 'ellipse'].includes(T))) sec('Fill', swatches(o ? o.fill : st.fill, c => setProp('fill', c), true));
     }
     if ((o && o.type === 'highlight') || (!o && T === 'highlight')) sec('Highlighter', swatches(o ? o.fill : st.hl, c => { if (o) setProp('fill', c); else st.hl = c; renderSide(); }, false, HL_COLORS));
-    if ((o && o.type === 'whiteout') || (!o && T === 'whiteout')) { sec('Whiteout', h('p', { class: 'note' }, 'Drag over anything to cover it. The colour matches the page background.'), o ? swatches(o.fill, c => setProp('fill', c), false, ['#ffffff', '#f5f5f5', '#fffbe6', '#000000']) : null); }
+    if ((o && o.type === 'whiteout') || (!o && T === 'whiteout')) { sec('Whiteout', h('p', { class: 'note' }, 'Drag over anything to cover it. The colour matches the page background. Words fully under it are also taken out of the saved PDF, so they can’t be copied or searched.'), o ? swatches(o.fill, c => setProp('fill', c), false, ['#ffffff', '#f5f5f5', '#fffbe6', '#000000']) : null); }
     if ((o && (o.type === 'check' || o.type === 'cross')) || (!o && ['check', 'cross'].includes(T))) sec('Mark', swatches(o ? o.color : st.color, c => setProp('color', c)));
     if (o) sec('Selected', h('div', { class: 'row' }, btn('Duplicate', { kind: 'sm', icon: 'dup', onclick: duplicate }), btn('To front', { kind: 'sm', icon: 'front', onclick: toFront }), btn('Delete', { kind: 'sm danger', icon: 'trash', onclick: () => removeObj(o) })));
     if (!o && T === 'select') side.append(h('div', { class: 'callout', html: icon('cursor') + '<div>Pick a tool above. Click an item to select it, drag to move, and use the corner dot to resize. Double-click text to retype it. Press Delete to remove.</div>' }));
@@ -2367,6 +2679,15 @@ function mountEditor(view, def, mode = 'edit') {
   async function buildPdf() {
     if (st.editing) commitEdit();
     const doc = await loadPdfLib(st.doc.bytes, st.doc.password);
+    // take the words under whiteouts (and the old words of edited text) out of the file, not just cover them
+    st.erased = 0; st.eraseKept = 0;
+    for (const p of st.pages) {
+      const wos = p.objs.filter(o => o.type === 'whiteout' && o.w > 0 && o.h > 0);
+      if (!wos.length || !p.page) continue;
+      const boxes = wos.map(o => { const a = p.vp1.convertToPdfPoint(o.x, o.y), b = p.vp1.convertToPdfPoint(o.x + o.w, o.y + o.h); return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])]; });
+      try { const r = await PdfErase.erasePage(PDFLib, doc, p.n - 1, p.page, boxes); st.erased += r.removed; if (r.kept) st.eraseKept++; }
+      catch (e) { console.warn('Sheaf: could not remove covered words on page ' + p.n, e); st.eraseKept++; }
+    }
     const { degrees, StandardFonts, BlendMode, LineCapStyle } = PDFLib;
     // forms
     if (st.fields.length) {
@@ -2437,6 +2758,7 @@ function mountEditor(view, def, mode = 'edit') {
     await withBusy('Saving your PDF', async () => {
       const bytes = await buildPdf();
       await saveFile(new Blob([bytes], { type: 'application/pdf' }), baseName(st.doc.name) + (mode === 'sign' ? '-signed' : '-edited') + '.pdf');
+      if (st.eraseKept) toast('On ' + (st.eraseKept === 1 ? 'one page' : st.eraseKept + ' pages') + ' the words under a whiteout could not be taken out safely, so they are covered only. Someone with the file could still copy them.', 'bad');
     });
   }
   renderSide();
