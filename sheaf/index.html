@@ -5,7 +5,7 @@
    Add ?standalone=1 to the address to open it by itself. */
 (function(){var inside=false;try{inside=window.parent!==window&&window.parent.location.origin===location.origin}catch(e){}
   if(inside)document.documentElement.classList.add('embed');
-  else if(!/[?&]standalone=1/.test(location.search)&&!/^(localhost|127\.)/.test(location.hostname)&&location.protocol!=='file:')location.replace(new URL('../#docs',location.href).href);})();
+  else if(!/[?&]standalone=1/.test(location.search)&&!/^(localhost|127\.)/.test(location.hostname)&&location.protocol!=='file:')location.replace(new URL('../hub/#docs',location.href).href);})();
 </script>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">

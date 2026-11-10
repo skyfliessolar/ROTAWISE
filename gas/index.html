@@ -9,7 +9,7 @@
    Add ?standalone=1 to the address to open it by itself. */
 (function(){var inside=false;try{inside=window.parent!==window&&window.parent.location.origin===location.origin}catch(e){}
   if(inside)document.documentElement.classList.add('embed');
-  else if(!/[?&]standalone=1/.test(location.search)&&!/^(localhost|127\.)/.test(location.hostname)&&location.protocol!=='file:')location.replace(new URL('../#gas',location.href).href);})();
+  else if(!/[?&]standalone=1/.test(location.search)&&!/^(localhost|127\.)/.test(location.hostname)&&location.protocol!=='file:')location.replace(new URL('../hub/#gas',location.href).href);})();
 </script>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -707,7 +707,7 @@ async function boot(){
       store=await makeCloud(cfg);
       store.onAuth(async u=>{
         detach();
-        if(!u){S.me=null;S.boot='login';render();return}
+        if(!u){S.me=null;if(await trySso())return;S.boot='login';render();return}
         try{S.me=await identify(u)}catch(e){S.loginErr=e.message;S.me=null;await store.signOut();return}
         S.loginErr='';S.boot='ready';attach();render();
       });
@@ -717,6 +717,17 @@ async function boot(){
   render();
 }
 /* One login for everyone: a login ID (employee code) and PIN. The owner types their email in the same box. */
+/* Opened inside Rotawise: sign in by itself with the same login code and PIN the person just used there. */
+async function trySso(){
+  let j=null;try{j=JSON.parse(sessionStorage.getItem('rw_sso')||'null');sessionStorage.removeItem('rw_sso')}catch(e){}
+  if(!j||!j.code||!j.pin||Date.now()-(j.t||0)>12*3600e3||!document.documentElement.classList.contains('embed'))return false;
+  try{
+    const code=normCode(j.code),pin=String(j.pin).trim();
+    if(!code||!/^\d{4,8}$/.test(pin))throw 0;
+    const L=await store.getOne('logins',code);if(!L)throw 0;
+    await store.signIn(staffEmail(code,L.v),pinPw(pin));return true;
+  }catch(e){S.loginErr='Your Rotawise login is not set up for Gas yet (or the PIN is different here). Ask your admin, or log in below with your Gas login.';return false}
+}
 async function doLogin(f){
   const err=m=>{$('#lerr').textContent=m};err('');
   const id=f.elements.code.value.trim(),pw=f.elements.pin.value;
@@ -1007,7 +1018,7 @@ function orderCard(o){
    ${isManager()&&o.createdBy?`<div class="meta" style="margin-top:4px">Added by ${esc(whoLabel(o.createdBy))}</div>`:''}
    <div class="oact">
      ${o.deleted?(isManager()?`<button class="btn sm" data-act="restore-order" data-id="${esc(o.id)}">Restore</button>`:'')+(isAdmin()?`<button class="btn sm danger" data-act="purge-order" data-id="${esc(o.id)}">Delete for good</button>`:''):`
-     ${o.phone?`<a class="btn sec sm" data-act="noop" href="tel:${esc(o.phone.replace(/\s/g,''))}">Call</a>`:''}
+     ${o.phone?`<a class="btn sec sm" data-act="noop" target="_top" href="tel:${esc(o.phone.replace(/\s/g,''))}">Call</a>`:''}
      ${wa?`<a class="btn sec sm" data-act="noop" target="_blank" rel="noopener" href="${esc(wa)}">WhatsApp</a>`:''}
      ${isManager()&&o.payStatus!=='Paid'?`<button class="btn sec sm" data-act="mark-paid" data-id="${esc(o.id)}">Mark paid</button>`:''}
      ${todo?`<button class="btn sec sm" data-act="mark-delivered" data-id="${esc(o.id)}">Mark delivered</button>`:''}
@@ -1220,7 +1231,7 @@ function customersHtml(){
   ${l.length?`<div class="list">${l.map(c=>{const wa=c.owed&&c.phone?waLink(c.phone,payMsg(c.name,c.owed,c.lastUnpaid)):'';
     return`<div class="li"><div class="grow"><b>${esc(c.name)}</b> <span class="muted small">${esc(c.postcode)}</span>
      <div class="meta">${c.orders} order${c.orders===1?'':'s'} · last ${fdate(c.last)}${c.phone?' · '+esc(c.phone):''}</div>
-     <div class="row wrap" style="margin-top:6px">${c.phone?`<a class="btn sm sec" href="tel:${esc(c.phone.replace(/\s/g,''))}">Call</a>`:''}${wa?`<a class="btn sm sec" target="_blank" rel="noopener" href="${esc(wa)}">WhatsApp reminder</a>`:''}
+     <div class="row wrap" style="margin-top:6px">${c.phone?`<a class="btn sm sec" target="_top" href="tel:${esc(c.phone.replace(/\s/g,''))}">Call</a>`:''}${wa?`<a class="btn sm sec" target="_blank" rel="noopener" href="${esc(wa)}">WhatsApp reminder</a>`:''}
      <button class="btn sm sec" data-act="cust-orders" data-v="${esc(c.name)}">Orders</button><button class="btn sm sec" data-act="cust-new" data-v="${esc(c.name)}">New order</button></div></div>
      <div style="text-align:right">${c.owed?`<b class="num" style="color:var(--bad)">${money(c.owed)}</b><div class="when">owed</div>`:'<span class="tag t-ok">Paid up</span>'}${c.account?`<div class="when">${money(c.account)} on account</div>`:''}</div></div>`}).join('')}</div>`
   :'<div class="card empty">No customers yet.</div>'}`;
