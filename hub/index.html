@@ -106,6 +106,22 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .save-flash{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;box-shadow:var(--sh);z-index:60;opacity:0;transition:opacity .2s}
 .save-flash.show{opacity:1}
 .scrollx{overflow-x:auto}
+.mbtn{border:1px solid var(--line);background:var(--card);color:var(--accent);border-radius:9px;padding:6px 12px;font-weight:600;font-size:13px}
+.modal{position:fixed;inset:0;z-index:70;background:rgba(10,20,32,.5);display:grid;place-items:center;padding:16px}
+.sheet{background:var(--card);border-radius:16px;box-shadow:var(--sh);width:100%;max-width:420px;padding:18px;max-height:90vh;overflow:auto}
+.sheethead{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.sheethead b{font-size:17px}
+.sheethead .x{margin-left:auto;background:var(--bg);border:0;color:var(--muted);width:30px;height:30px;border-radius:8px;font-size:15px}
+.mstat{color:var(--muted);font-size:13px;margin-bottom:14px}
+.mactions{display:flex;flex-direction:column;gap:9px}
+.mrow{text-align:left;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:11px;padding:12px 14px;font-weight:600;font-size:14.5px}
+.mrow.accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mrow.good{background:var(--good);color:#fff;border-color:var(--good)}
+.mrow.warn{border-color:var(--warn);color:var(--warn)}
+.mrow.bad{border-color:var(--bad);color:var(--bad)}
+.mrow.ghost{color:var(--muted)}
+.mrow:disabled{opacity:.55}
+.mdiv{height:1px;background:var(--line);margin:4px 0}
 .segbtns{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
 .segbtns button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px}
 .segbtns button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
@@ -220,6 +236,16 @@ function makeSupabaseApi(){
     async log(event, detail){
       try{ await sb.from('client_logs').insert({ build:BUILD, event, detail:detail||null,
         ua:navigator.userAgent, screen:innerWidth+'x'+innerHeight, who: state.me ? (state.me.name||state.me.employee_code) : null }); }catch(e){}
+    },
+    async staffOp(action, employee_id, pin){
+      const { data, error } = await sb.functions.invoke('admin-staff', { body: { action, employee_id, pin } });
+      if(error){
+        let msg = error.message;
+        try{ const ctx = await error.context.json(); if(ctx && ctx.error) msg = ctx.error; }catch(e){}
+        throw new Error(msg);
+      }
+      if(data && data.error) throw new Error(data.error);
+      return data;
     }
   };
 }
@@ -241,6 +267,20 @@ function flipTheme(){
 }
 function flash(msg){ const f=$('#flash'); f.textContent=msg; f.classList.add('show'); clearTimeout(flash.t); flash.t=setTimeout(()=>f.classList.remove('show'),1600); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+/* tiny hyperscript helper */
+function h(tag, attrs, ...kids){
+  const el = document.createElement(tag);
+  if(attrs) for(const k in attrs){ const v = attrs[k];
+    if(v==null) continue;
+    else if(k==='class') el.className=v;
+    else if(k==='html') el.innerHTML=v;
+    else if(k==='style' && typeof v==='object') Object.assign(el.style, v);
+    else if(k.slice(0,2)==='on' && typeof v==='function') el.addEventListener(k.slice(2).toLowerCase(), v);
+    else el.setAttribute(k, v);
+  }
+  for(const c of kids.flat()){ if(c==null||c===false) continue; el.append(c.nodeType?c:document.createTextNode(c)); }
+  return el;
+}
 
 /* which apps can this person open */
 function allowed(appKey){
@@ -336,7 +376,7 @@ async function renderAdmin(){
   const cols = APPS.map(a=>a); // gas, cash, docs, rota + files extra
   const head = '<tr><th>Person</th><th>Store</th>'
     + '<th class="c">Rota</th><th class="c">Gas</th><th class="c">Cash</th><th class="c">Docs</th><th class="c">Files</th>'
-    + '<th class="c">Role</th><th class="c">Active</th></tr>';
+    + '<th class="c">Role</th><th class="c">Active</th><th class="c">Manage</th></tr>';
   const rows = state.staff.map(e=>{
     const sw=(field)=> '<label class="sw"><input type="checkbox" data-emp="'+e.id+'" data-field="'+field+'"'
       +(e[field]?' checked':'')+(e.is_admin?' disabled':'')+'><span></span></label>';
@@ -355,6 +395,7 @@ async function renderAdmin(){
       + '<td class="c">'+sw('can_see_files')+'</td>'
       + '<td class="c">'+role+'</td>'
       + '<td class="c"><label class="sw"><input type="checkbox" data-emp="'+e.id+'" data-field="active"'+(e.active?' checked':'')+(e.id===state.me.id?' disabled':'')+'><span></span></label></td>'
+      + '<td class="c"><button class="mbtn" data-manage="'+e.id+'"'+(e.id===state.me.id?' disabled':'')+'>Manage</button></td>'
       + '</tr>';
   }).join('');
 
@@ -382,6 +423,75 @@ async function renderAdmin(){
     const patch = { is_admin: sel.value==='admin', is_manager: sel.value==='manager'||sel.value==='admin' };
     try{ await state.api.updateEmployee(emp.id, patch); Object.assign(emp,patch); flash('Saved'); }
     catch(e){ flash('Not saved: '+e.message); }
+  });
+  box.querySelectorAll('button[data-manage]').forEach(btn=> btn.onclick = ()=> manage(state.staff.find(x=>x.id===btn.dataset.manage)));
+}
+
+/* per-person manage sheet: PIN, deactivate/restore, delete */
+function manage(emp){
+  if(!emp) return;
+  const hasPin = !!emp.auth_user_id;
+  const sheet = h('div', { class:'modal' },
+    h('div', { class:'sheet' },
+      h('div', { class:'sheethead' }, h('b', null, emp.name||emp.employee_code),
+        h('button', { class:'x', html:'✕', onclick:close })),
+      h('div', { class:'mstat' }, emp.active ? 'Active' : 'Deactivated',
+        ' · ', hasPin ? 'has a login PIN' : 'no login yet',
+        ' · code ', h('b', null, emp.employee_code)),
+      h('div', { class:'mactions' },
+        mbtn(hasPin?'Reset PIN':'Set a PIN', 'accent', async ()=>{
+          const pin = await askPin(emp); if(pin==null) return;
+          await op('set_pin', emp, pin, (hasPin?'PIN reset for ':'Login set up for ')+(emp.name||emp.employee_code));
+        }),
+        hasPin ? mbtn('Remove PIN (old PIN stops working)', 'ghost', ()=> op('remove_pin', emp, null, 'PIN removed — '+(emp.name||emp.employee_code)+' can’t sign in until you set a new one')) : null,
+        emp.active
+          ? mbtn('Remove (deactivate — keeps history, undoable)', 'warn', ()=> op('deactivate', emp, null, (emp.name||emp.employee_code)+' removed. Use Restore to undo.'))
+          : mbtn('Restore (undo removal)', 'good', ()=> op('restore', emp, null, (emp.name||emp.employee_code)+' restored.')),
+        h('div', { class:'mdiv' }),
+        mbtn('Delete permanently', 'bad', async ()=>{
+          const okDel = await confirmDelete(emp); if(!okDel) return;
+          await op('delete_permanent', emp, null, (emp.name||emp.employee_code)+' permanently deleted');
+        }),
+        h('p', { class:'note', style:{marginTop:'4px'} }, 'Deleting erases this person and their shifts and requests. Their past entries stay in reports but show no name. This can’t be undone — “Remove” is the safe, reversible option.')
+      )
+    )
+  );
+  document.body.appendChild(sheet);
+  function close(){ sheet.remove(); }
+  async function op(action, emp, pin, okMsg){
+    sheet.querySelectorAll('button').forEach(b=> b.disabled=true);
+    try{
+      await state.api.staffOp(action, emp.id, pin);
+      flash(okMsg||'Done');
+      state.staff = await state.api.staff();   // refresh
+      close(); renderAdmin();
+    }catch(e){ flash('Didn’t work: '+e.message); sheet.querySelectorAll('button').forEach(b=> b.disabled=false); }
+  }
+}
+function mbtn(label, kind, onclick){ return h('button', { class:'mrow '+kind, onclick }, label); }
+function askPin(emp){
+  return new Promise(res=>{
+    const m = h('div', { class:'modal' }, h('div', { class:'sheet' },
+      h('div', { class:'sheethead' }, h('b', null, 'PIN for '+(emp.name||emp.employee_code)), h('button', { class:'x', html:'✕', onclick:()=>{m.remove();res(null)} })),
+      h('p', { class:'note' }, 'Enter a PIN of at least 4 digits. Share it with them privately — they sign in with code “'+esc(emp.employee_code)+'” and this PIN.'),
+      h('input', { id:'pinIn', type:'text', inputmode:'numeric', placeholder:'e.g. 4821', style:{marginTop:'8px'} }),
+      h('div', { class:'mactions' },
+        h('button', { class:'mrow accent', onclick:()=>{ const v=m.querySelector('#pinIn').value.trim(); if(!/^\d{4,}$/.test(v)){ m.querySelector('#pinIn').style.borderColor='var(--bad)'; return; } m.remove(); res(v); } }, 'Save PIN'))
+    ));
+    document.body.appendChild(m); setTimeout(()=>m.querySelector('#pinIn').focus(),50);
+  });
+}
+function confirmDelete(emp){
+  return new Promise(res=>{
+    const m = h('div', { class:'modal' }, h('div', { class:'sheet' },
+      h('div', { class:'sheethead' }, h('b', null, 'Delete '+(emp.name||emp.employee_code)+'?'), h('button', { class:'x', html:'✕', onclick:()=>{m.remove();res(false)} })),
+      h('p', { class:'note' }, 'This permanently removes them and their shifts and requests. To confirm, type DELETE.'),
+      h('input', { id:'delIn', placeholder:'DELETE', style:{marginTop:'8px'} }),
+      h('div', { class:'mactions' },
+        h('button', { class:'mrow bad', onclick:()=>{ if(m.querySelector('#delIn').value.trim().toUpperCase()!=='DELETE') return; m.remove(); res(true); } }, 'Delete permanently'),
+        h('button', { class:'mrow ghost', onclick:()=>{m.remove();res(false)} }, 'Cancel'))
+    ));
+    document.body.appendChild(m); setTimeout(()=>m.querySelector('#delIn').focus(),50);
   });
 }
 
