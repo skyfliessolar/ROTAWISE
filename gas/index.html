@@ -90,6 +90,11 @@ h3{font-size:15px;margin:0 0 6px}
 .tablewrap.auto{min-height:0;max-height:none}
 .bystore th,.bystore td.txt,.bystore td.bal{padding:6px 10px!important;height:auto}
 .chk{display:flex;flex-wrap:wrap;gap:4px 16px}
+.doing{margin-top:4px;padding:5px 9px;border-radius:8px;background:var(--soft);border:1px solid var(--line);font-size:13px}
+.doing.now{border-color:var(--ok,#2f9e6a)}
+.typing{color:var(--ok,#2f9e6a);font-weight:700;font-size:12px}
+.liveband{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
+.liveband .who{font-size:13px}
 .btn{background:var(--btn);color:var(--btnink);border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer}
 .btn.sec{background:var(--soft);color:var(--ink);border:1px solid var(--line)}
 .btn.danger{background:none;color:var(--bad);border:1px solid var(--bad)}
@@ -315,7 +320,7 @@ const DEFAULT_PRODUCTS=[
 
 /* ---------- state ---------- */
 const S={boot:'loading',me:null,orders:[],stock:[],settings:null,audit:[],presence:[],staff:[],team:[],reminders:[],adminCfg:null,store:lsGet('gdt_store')||'all',mig:{},
-  view:'home',period:'all',ov:lsGet('gdt_ov')||(innerWidth>=860?'sheet':'cards'),sv:'cards',loginTab:'staff',
+  view:'home',period:'all',ov:lsGet('gdt_ov')||(innerWidth>=860?'sheet':'cards'),sv:'cards',
   f:{q:'',pay:'all',del:'all',flag:false,deleted:false,from:'',to:''},act:{who:'all'},online:navigator.onLine,err:'',focusKey:null,review:null};
 let store=null;
 const products=()=>(S.settings&&S.settings.products&&S.settings.products.length?S.settings.products:DEFAULT_PRODUCTS);
@@ -421,12 +426,13 @@ function attach(){
     ['orders','stock'].forEach(c=>S.me.stores.slice(0,10).forEach(id=>unsubs.push(store.subWhere(c,'storeId','==',id,a=>{parts[c][id]=a;S[c]=Object.values(parts[c]).flat();render()},err))));
   }else{on('orders','orders',null,(a,fc)=>migrate('orders',a,fc));on('stock','stock',null,(a,fc)=>migrate('stock',a,fc))}
   on('settings','settings',a=>a.find(x=>x.id==='main')||null);
-  if(isManager()){unsubs.push(store.subQuery('audit',{orderBy:'at',limit:300},a=>{S.audit=a;render()},err));on('presence','presence');on('reminders','reminders');
+  if(isManager()){unsubs.push(store.subQuery('audit',{orderBy:'at',limit:300},a=>{S.audit=a;render()},err));unsubs.push(store.sub('presence',a=>{S.presence=a;   // live view: refresh Home/Activity without disturbing your own typing
+      if(['home','activity'].includes(S.view)&&!document.querySelector('#sheet.open')&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))render()},err));on('reminders','reminders');
     unsubs.push(store.sub('team',(a,fc)=>{S.team=a;if(!fc)S.teamLive=true;syncTeam();render()},()=>{}))}
   if(isAdmin()){on('staff','staff',null,(a,fc)=>{if(!fc)S.staffLive=true;syncTeam()});on('admin','adminCfg',a=>a.find(x=>x.id==='config')||null)}
   /* employees: if the admin switches the login off or changes role/stores, apply it straight away */
   if(!isAdmin()&&S.me&&store.subOne)unsubs.push(store.subOne('staff',S.me.uid,d=>{
-    if(!d||d.active!==true){S.loginErr='Your login was switched off. Ask your admin.';store.signOut&&store.signOut();return}
+    if(!d||d.active!==true){S.loginErr='Your login was switched off. Ask your manager.';store.signOut&&store.signOut();return}
     const ns=Array.isArray(d.stores)?d.stores:[];
     if((d.role||'staff')!==S.me.role||JSON.stringify(ns)!==JSON.stringify(S.me.stores||[])||(d.name&&d.name!==S.me.name)){
       Object.assign(S.me,{role:d.role||'staff',stores:ns,name:d.name||S.me.name,email:d.email||''});detach();attach();render()}
@@ -434,8 +440,36 @@ function attach(){
   if(!isManager()&&S.me)unsubs.push(store.subWhere('reminders','toUids','array-contains',S.me.uid,a=>{S.reminders=a;render()},()=>{}));
   if(store.mode==='cloud'&&!isAdmin()){beat();hb=setInterval(beat,45000)}
 }
+/* A short line saying what an employee is doing right now. Managers see it live; nothing is shown to the employee. */
+function doingNow(){
+  const sh=document.querySelector('#sheet.open');
+  if(sh){
+    const f=sh.querySelector('form');const title=(sh.querySelector('.sh-head h1')?.textContent||'').trim();
+    if(f&&f.id==='oform'){
+      const e=f.elements;const o=f.dataset.id?S.orders.find(x=>x.id===f.dataset.id):null;
+      const items={};products().forEach(p=>{const q=+(e['q_'+p.id]?.value||0);if(q)items[p.id]=q});
+      const amt=e.amount&&e.amount.value!==''?money(+e.amount.value):'';
+      return[o?`Editing ${o.orderNo||'an order'}`:f.dataset.sale==='1'?'New sale':'New order',multi()&&e.storeId?storeName(e.storeId.value):'',
+        (e.customer?.value||'').trim(),Object.keys(items).length?itemsText(items):'',amt,e.payStatus?.value||''].filter(Boolean).join(' · ').slice(0,220);
+    }
+    if(f&&f.id==='sform'){const items={};products().forEach(p=>{const q=+(f.elements['s_'+p.id]?.value||0);if(q)items[p.id]=q});
+      return[title,multi()&&f.elements.storeId?storeName(f.elements.storeId.value):'',Object.keys(items).length?itemsText(items):''].filter(Boolean).join(' · ').slice(0,220)}
+    if(f&&f.id==='remform')return['Setting a reminder',(f.elements.title?.value||'').trim()].filter(Boolean).join(': ').slice(0,160);
+    return title||'Using a form';
+  }
+  const a=document.activeElement;
+  if(a&&a.classList?.contains('cell')&&a.dataset.oid){const o=S.orders.find(x=>x.id===a.dataset.oid);return`Editing ${o?.orderNo||'an order'} in the sheet${o?.customer?' · '+o.customer:''}`}
+  if(S.view==='orders'&&S.f?.q)return`Searching orders: "${String(S.f.q).slice(0,40)}"`;
+  return'';
+}
+let lastDoing='',beatT=0;
 function beat(){if(!S.me||isAdmin()||store.mode!=='cloud')return;
-  write(()=>store.put('presence',S.me.uid,{code:S.me.code,name:S.me.name,role:S.me.role,view:S.view,store:allStores().length>1&&curStore()!=='all'?storeName(curStore()):'',lastSeen:Date.now()}))}
+  const doing=document.hidden?'':doingNow();lastDoing=doing;
+  write(()=>store.put('presence',S.me.uid,{code:S.me.code,name:S.me.name,role:S.me.role,view:S.view,store:allStores().length>1&&curStore()!=='all'?storeName(curStore()):'',
+    doing,doingAt:doing?Date.now():0,away:!!document.hidden,lastSeen:Date.now()}))}
+/* send an update shortly after the employee changes something, at most about once a second */
+function beatSoon(){if(!S.me||isAdmin()||store.mode!=='cloud')return;clearTimeout(beatT);beatT=setTimeout(()=>{if(doingNow()!==lastDoing)beat()},900)}
+document.addEventListener('visibilitychange',()=>{if(S.boot==='ready')beat()});
 /* orders and stock saved before stores existed belong to the first store (admin does this once, from fresh server data only) */
 function migrate(c,a,fromCache){
   if(!isAdmin()||fromCache||S.mig[c])return;S.mig[c]=true;
@@ -457,7 +491,7 @@ async function identify(u){
     return{uid:u.uid,code:'admin',name:'Admin',role:'admin'};
   }
   const d=await store.getOne('staff',u.uid);
-  if(!d||d.active!==true)throw new Error('This login is switched off. Ask your admin.');
+  if(!d||d.active!==true)throw new Error('This login is switched off. Ask your manager.');
   return{uid:u.uid,code:d.code,name:d.name,role:d.role||'staff',email:d.email||'',stores:Array.isArray(d.stores)?d.stores:[]};
 }
 async function boot(){
@@ -476,19 +510,23 @@ async function boot(){
   else S.boot='setup';
   render();
 }
+/* One login for everyone: a login ID (employee code) and PIN. The owner types their email in the same box. */
 async function doLogin(f){
   const err=m=>{$('#lerr').textContent=m};err('');
+  const id=f.elements.code.value.trim(),pw=f.elements.pin.value;
+  const wrong='Wrong login ID or PIN. Ask your manager if you have forgotten them.';
+  if(!id||!pw)return err('Enter your login ID and PIN.');
   const b=f.querySelector('[type=submit]');b.disabled=true;
   try{
-    if(S.loginTab==='admin')await store.signIn(f.elements.em.value.trim(),f.elements.pw.value);
+    if(id.includes('@'))await store.signIn(id,pw);
     else{
-      const code=normCode(f.elements.code.value),pin=f.elements.pin.value.trim();
-      if(!code||!/^\d{4,8}$/.test(pin)){err('Enter your employee code and your 4–8 digit PIN.');return}
+      const code=normCode(id),pin=pw.trim();
+      if(!code||!/^\d{4,8}$/.test(pin))return err(wrong);
       const L=await store.getOne('logins',code);
-      if(!L){err('That employee code is not set up. Ask your admin.');return}
+      if(!L)return err(wrong);
       await store.signIn(staffEmail(code,L.v),pinPw(pin));
     }
-  }catch(e){err(S.loginTab==='admin'?'Could not sign in. Check the email and password.':'Wrong code or PIN.')}
+  }catch(e){err(/network|offline/i.test(e.code||e.message||'')?'No internet connection. Try again when you are online.':wrong)}
   finally{b.disabled=false}
 }
 
@@ -666,18 +704,14 @@ function view(){
 function setupHtml(){return`<div class="center"><div class="card"><h1>Gas deliveries</h1>
   <p class="muted">No online database is configured.</p><button class="btn sec" data-act="use-local">Try it on this device only</button></div></div>`}
 function loginHtml(){
-  const t=S.loginTab;
-  return`<div class="center"><form class="card f" id="login" autocomplete="on">
+  return`<div class="center"><form class="card f" id="login" autocomplete="on" novalidate>
   <div class="brand" style="color:var(--ink)">${logo}<span>Rotawise</span><small style="border-color:var(--line)">Gas deliveries</small></div>
-  <h1 style="margin:0">Sign in</h1>
-  <div class="seg2" role="tablist"><button type="button" data-act="login-tab" data-v="staff" class="${t==='staff'?'on':''}">Employee</button><button type="button" data-act="login-tab" data-v="admin" class="${t==='admin'?'on':''}">Admin</button></div>
-  ${t==='staff'?`<div><label class="l" for="code">Employee code</label><input class="in" id="code" name="code" autocomplete="username" autocapitalize="none" required></div>
-  <div><label class="l" for="pin">PIN</label><input class="in" id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required></div>`
-  :`<div><label class="l" for="em">Email</label><input class="in" id="em" name="em" type="email" autocomplete="username" required></div>
-  <div><label class="l" for="pw">Password</label><input class="in" id="pw" name="pw" type="password" autocomplete="current-password" required></div>`}
+  <h1 style="margin:0">Log in</h1>
+  <div><label class="l" for="code">Login ID</label><input class="in" id="code" name="code" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required></div>
+  <div><label class="l" for="pin" id="pinl">PIN</label><input class="in" id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required></div>
   <p class="err" id="lerr">${esc(S.loginErr||'')}</p>
-  <button class="btn" type="submit">Sign in</button>
-  <p class="hint" style="text-align:center">${t==='staff'?'Your admin gives you your code and PIN.':'For the business owner.'}</p>
+  <button class="btn" type="submit">Log in</button>
+  <p class="hint" style="text-align:center">Use the login ID and PIN your manager gave you.</p>
 </form><p class="small" style="text-align:center"><a href="../">Back to Rotawise</a></p></div>`}
 
 /* ----- home ----- */
@@ -699,6 +733,7 @@ function homeHtml(){
   return`<h1>${isManager()?'Overview':'Hello, '+esc(S.me?.name||'')}</h1>
   <div class="qa"><button class="btn big" data-act="sale">Quick sale</button><button class="btn big sec" data-act="new-order">New delivery order</button></div>
   ${due.length?`<div class="banner warn"><b>${due.length} reminder${due.length===1?'':'s'} due</b> · ${esc(due[0].title)}${due.length>1?' and more':''} <button class="btn sm sec" data-act="nav" data-v="reminders" style="margin-left:6px">Open</button></div>`:''}
+  ${liveBand()}
   ${mine.length?`<div class="banner ${mine.some(r=>(r.nextAt||'')<=nowLocal())?'warn':'info'}"><div class="row"><b style="margin-right:auto">Your reminders</b><button class="btn sm sec" data-act="nav" data-v="reminders">Open</button></div>${mine.slice(0,4).map(r=>`<div class="small" style="margin-top:4px">${(r.nextAt||'')<=nowLocal()?'<b class="t-bad">Due</b> ':''}${fwhen(r.nextAt)} · ${esc(r.title)}${r.note?' · '+esc(r.note):''}</div>`).join('')}</div>`:''}
   ${low.length?`<div class="banner bad"><b>Low stock:</b> ${low.map(x=>`${sn.per?esc(storeName(x.store))+' ':''}${esc(pName(x.p))} (${x.qty})`).join(', ')}</div>`:''}
   ${flags.length&&isManager()?`<h2>Flagged doubts</h2>${flags.map(orderCard).join('')}`:''}
@@ -725,6 +760,12 @@ function homeHtml(){
   <h2>Stock now</h2>${stockCards(sn)}`;
 }
 
+function liveBand(){
+  if(!isManager())return'';const on=S.presence.filter(isOnline).sort((a,b)=>b.lastSeen-a.lastSeen);if(!on.length)return'';
+  return`<div class="banner info liveband"><b><span class="dot"></span>${on.length} online now</b>
+    ${on.slice(0,4).map(p=>`<span class="who">${esc(p.name)}${p.doing?': <span class="muted">'+esc(p.doing.slice(0,60))+(p.doing.length>60?'…':'')+'</span>':p.away?' <span class="muted">(away)</span>':''}</span>`).join('')}
+    <button class="btn sm sec" style="margin-left:auto" data-act="nav" data-v="activity">Watch live</button></div>`;
+}
 function byStoreHtml(){
   const rows=stores().map(s=>{const os=S.orders.filter(o=>!o.deleted&&sid(o)===s.id);const op=os.filter(inPeriod);
     const sum=(l,fn)=>r2(l.reduce((t,o)=>t+(fn(o)?Number(o.amount)||0:0),0));
@@ -979,17 +1020,30 @@ function customersHtml(){
 }
 
 /* ----- activity (managers) ----- */
+const PAGE={home:'Home',orders:'Orders',stock:'Stock',customers:'Customers',settings:'More',reminders:'Reminders',activity:'Activity'};
+const isOnline=p=>Date.now()-(p.lastSeen||0)<150000;
+function lastSaved(uid){return S.audit.find(a=>a.byUid===uid)}
+function liveCard(p){
+  const fresh=p.doing&&Date.now()-(p.doingAt||0)<20000;const ls=lastSaved(p.id);
+  return`<div class="li live"><div class="grow">
+    <div><span class="dot ${p.away||Date.now()-p.lastSeen>70000?'idle':''}"></span><b>${esc(p.name)}</b> <span class="muted small">${esc(p.code)} · ${ROLE_LABEL[p.role]||''}</span></div>
+    <div class="meta">${p.away?'App in the background':'On '+(PAGE[p.view]||esc(p.view||''))}${p.store?' · '+esc(p.store):''} · ${ago(p.lastSeen)}</div>
+    ${p.doing?`<div class="doing ${fresh?'now':''}">${fresh?'<span class="typing">● now</span> ':''}${esc(p.doing)}</div>`:''}
+    ${ls?`<div class="meta">Last saved: ${esc(ls.action)} · ${esc(String(ls.summary||'').slice(0,90))} · ${ago(ls.at)}</div>`:''}
+  </div><button class="btn sm sec" data-act="act-who" data-v="${esc(whoLabel({code:p.code,name:p.name,role:p.role}))}">Their changes</button></div>`;
+}
 function activityHtml(){
   if(!isManager())return'<div class="card empty">Only managers can see activity.</div>';
-  const online=S.presence.filter(p=>Date.now()-(p.lastSeen||0)<150000).sort((a,b)=>b.lastSeen-a.lastSeen);
+  const online=S.presence.filter(isOnline).sort((a,b)=>b.lastSeen-a.lastSeen);
+  const recent=S.presence.filter(p=>!isOnline(p)&&Date.now()-(p.lastSeen||0)<36*3600000).sort((a,b)=>b.lastSeen-a.lastSeen);
   const people=[...new Set(S.audit.map(a=>whoLabel(a.by)))];
   const cs=curStore();
   const items=S.audit.filter(a=>(S.act.who==='all'||whoLabel(a.by)===S.act.who)&&(cs==='all'||!a.storeId||a.storeId===cs));
-  const viewName={home:'Home',orders:'Orders',stock:'Stock',customers:'Customers',settings:'More',reminders:'Reminders',activity:'Activity'};
   return`<h1>Activity</h1>
-  <p class="muted small">Live: updates as people work. Employees are not notified that you are watching.</p>
-  <h2>Online now</h2>
-  ${online.length?`<div class="list">${online.map(p=>`<div class="li"><div class="grow"><span class="dot ${Date.now()-p.lastSeen>70000?'idle':''}"></span><b>${esc(p.name)}</b> <span class="muted small">${esc(p.code)} · ${ROLE_LABEL[p.role]||''}</span></div><span class="when">on ${viewName[p.view]||esc(p.view||'')}${p.store?' · '+esc(p.store):''} · ${ago(p.lastSeen)}</span></div>`).join('')}</div>`:'<div class="card empty">No employees online right now.</div>'}
+  <p class="muted small">Live: this page updates by itself as people work, including forms they are filling in before they save. Watching does not interrupt them.</p>
+  <h2>Online now${online.length?` (${online.length})`:''}</h2>
+  ${online.length?`<div class="list">${online.map(liveCard).join('')}</div>`:'<div class="card empty">No employees online right now.</div>'}
+  ${recent.length?`<h2>Earlier today</h2><div class="list">${recent.map(p=>`<div class="li"><div class="grow"><b>${esc(p.name)}</b> <span class="muted small">${esc(p.code)}</span><div class="meta">Last seen ${ago(p.lastSeen)} on ${PAGE[p.view]||esc(p.view||'')}${p.store?' · '+esc(p.store):''}</div></div><button class="btn sm sec" data-act="act-who" data-v="${esc(whoLabel({code:p.code,name:p.name,role:p.role}))}">Their changes</button></div>`).join('')}</div>`:''}
   <h2>Recent changes</h2>
   <div class="chips"><button class="chip ${S.act.who==='all'?'on':''}" data-act="act-who" data-v="all">Everyone</button>${people.map(p=>`<button class="chip ${S.act.who===p?'on':''}" data-act="act-who" data-v="${esc(p)}">${esc(p)}</button>`).join('')}</div>
   ${items.length?`<div class="list">${items.slice(0,200).map(a=>`<div class="li"><div class="grow"><b>${esc(whoLabel(a.by))}</b> · ${esc(a.action)}<div class="meta">${esc(a.summary)}</div></div>
@@ -1039,6 +1093,7 @@ function settingsHtml(){
   <div class="card"><b>Signed in as ${esc(meLabel())}</b> <span class="muted small">${ROLE_LABEL[S.me?.role]||''}</span>
    <div class="row wrap" style="margin-top:10px">${store.mode==='cloud'?'<button class="btn sec sm" data-act="signout">Sign out</button>':''}
    ${isManager()?'<button class="btn sec sm" data-act="nav" data-v="activity">Activity</button>':''}<button class="btn sec sm" data-act="nav" data-v="reminders">Reminders${dueReminders().length?` (${dueReminders().length} due)`:''}</button></div>
+   ${!isManager()?'<p class="hint" style="margin-bottom:0">Your manager can see your work in this app as you do it.</p>':''}
    ${allStores().length>1&&!isManager()?`<p class="hint" style="margin-bottom:0">Your store${stores().length===1?'':'s'}: ${stores().map(x=>esc(x.name)).join(', ')||'none'}</p>`:''}</div>
   ${isAdmin()?storesCard():''}
   ${isAdmin()?`<h2>Employees and logins</h2>
@@ -1082,8 +1137,8 @@ function storesCard(){
 }
 
 /* ---------- forms (bottom sheet) ---------- */
-function openSheet(html,wide){const s=$('#sheet');s.innerHTML=`<div class="bg" data-act="close-sheet"></div><div class="panel ${wide?'widep':''}">${html}</div>`;s.classList.add('open');document.body.classList.add('lock')}
-function closeSheet(){$('#sheet').classList.remove('open');$('#sheet').innerHTML='';document.body.classList.remove('lock')}
+function openSheet(html,wide){const s=$('#sheet');s.innerHTML=`<div class="bg" data-act="close-sheet"></div><div class="panel ${wide?'widep':''}">${html}</div>`;s.classList.add('open');document.body.classList.add('lock');beatSoon()}
+function closeSheet(){$('#sheet').classList.remove('open');$('#sheet').innerHTML='';document.body.classList.remove('lock');beatSoon()}
 const sheetHead=t=>`<div class="sh-head"><h1>${t}</h1><button type="button" class="x" data-act="close-sheet" aria-label="Close">×</button></div>`;
 function nextOrderNo(st){const pf=storePrefix(st||defStore());const re=new RegExp('^'+pf+'-(\\d+)$');let m=0;S.orders.forEach(o=>{const x=re.exec(o.orderNo||'');if(x)m=Math.max(m,+x[1])});return pf+'-'+String(m+1).padStart(4,'0')}
 function availFor(st,o){const sn=stockFor(st);const a={};products().forEach(p=>a[p.id]=(sn.now[p.id]||0)+(o&&!o.deleted&&o.delStatus==='Delivered'&&sid(o)===st?(o.items?.[p.id]||0):0));return a}
@@ -1678,7 +1733,6 @@ document.addEventListener('click',async ev=>{
   const find=()=>S.orders.find(x=>x.id===id);
   switch(a){
     case'nav':closeSheet();S.view=t.dataset.v;render();scrollTo(0,0);beat();break;
-    case'login-tab':S.loginTab=t.dataset.v;S.loginErr='';render();break;
     case'store':S.store=t.dataset.v;lsSet('gdt_store',S.store);render();beat();break;
     case'store-new':storeSheet();break;
     case'store-edit':storeSheet(id);break;
@@ -1742,6 +1796,7 @@ document.addEventListener('click',async ev=>{
 });
 document.addEventListener('focusin',ev=>{
   const el=ev.target;if(restoring||!el.classList?.contains('cell'))return;
+  beatSoon();
   typingKey=null;if(el.tagName==='INPUT')try{el.select()}catch{}
 });
 document.addEventListener('keydown',ev=>{
@@ -1758,12 +1813,15 @@ document.addEventListener('keydown',ev=>{
 document.addEventListener('input',ev=>{
   const el=ev.target;
   if(el.classList?.contains('cell'))typingKey=el.dataset.k;
+  if(el.id==='code'&&el.closest('#login')){const em=el.value.includes('@'),p=$('#pin');p.inputMode=em?'text':'numeric';$('#pinl').textContent=em?'Password':'PIN';return}
+  if(el.closest('#sheet')||el.classList?.contains('cell'))beatSoon();
   if(el.id==='q'){S.f.q=el.value;$('#olist').innerHTML=orderListHtml();return}
   if(el.id==='cq'){S.cq=el.value;const p=el.selectionStart;render();const n=$('#cq');if(n){n.focus();try{n.setSelectionRange(p,p)}catch{}}return}
   if(el.closest('#oform')){if(el.name==='amount')el.form.dataset.touched='1';calcOrderForm()}
 });
 document.addEventListener('change',async ev=>{
   const el=ev.target;
+  if(el.closest&&el.closest('#sheet'))beatSoon();
   if(el.classList.contains('cell')){updateCell(el.dataset.oid,el.dataset.col,el.value);return}
   if(el.id==='ff'||el.id==='ft'){S.f[el.id==='ff'?'from':'to']=el.value;$('#olist').innerHTML=orderListHtml();return}
   if(el.id==='xlin'&&el.files[0]){
