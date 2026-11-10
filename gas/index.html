@@ -95,6 +95,30 @@ h3{font-size:15px;margin:0 0 6px}
 .typing{color:var(--ok,#2f9e6a);font-weight:700;font-size:12px}
 .liveband{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
 .liveband .who{font-size:13px}
+#watch{position:fixed;inset:0;z-index:80;display:none;flex-direction:column;background:#0b1118;color:#e7edf3}
+#watch.open{display:flex}
+#watch .wbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid #223042;background:#0f1722}
+#watch .wbar .btn:last-child{margin-left:auto}
+#watch .wlive{color:#ff4d6d;font-weight:800;font-size:12px;letter-spacing:.6px}
+#watch .wsub{color:#8fa1b3}
+#watch .wbody{flex:1;overflow:auto;padding:14px}
+#watch .wbody.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-content:start}
+#watch .wbody.one{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;align-items:start}
+@media (max-width:860px){#watch .wbody.one{grid-template-columns:1fr}}
+#watch .wtile{background:#121a24;border:1px solid #223042;border-radius:12px;padding:10px;min-width:0}
+#watch .wtop{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:14px;flex-wrap:wrap}
+#watch .wtop .btn{margin-left:auto}
+#watch .wmeta{color:#8fa1b3}
+#watch .wscreen{position:relative;overflow:hidden;border-radius:8px;background:#1b2531;min-height:120px;max-width:100%;margin:0 auto}
+#watch .wscale{transform-origin:0 0;position:absolute;left:0;top:0}
+#watch iframe{border:0;display:block;pointer-events:none;background:#f4f6f8}
+#watch .wmsg:empty{display:none}
+#watch .wmsg{position:absolute;left:8px;right:8px;bottom:8px;padding:8px 10px;border-radius:8px;background:rgba(11,17,24,.85);color:#e7edf3;font-size:13px}
+#watch .wdoing{font-size:13px;margin-top:8px;color:#b9c6d3}
+#watch .wside{background:#121a24;border:1px solid #223042;border-radius:12px;padding:12px;max-height:calc(100vh - 110px);overflow:auto}
+#watch .wside h2{margin:0 0 8px;color:#e7edf3}
+#watch .wchg{padding:8px 0;border-bottom:1px solid #223042}
+#watch .muted{color:#8fa1b3}
 .btn{background:var(--btn);color:var(--btnink);border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer}
 .btn.sec{background:var(--soft);color:var(--ink);border:1px solid var(--line)}
 .btn.danger{background:none;color:var(--bad);border:1px solid var(--bad)}
@@ -365,6 +389,7 @@ const Local={
   sub(c,cb){(this.subs[c]??=[]).push(cb);cb(Object.values(this.read(c)),false);return()=>{this.subs[c]=(this.subs[c]||[]).filter(x=>x!==cb)}},
   subOne(c,id,cb){return this.sub(c,a=>cb(a.find(x=>x.id===id)||null))},
   async patch(c,id,o){const d=this.read(c);if(d[id]){d[id]={...d[id],...clean(o)};this.write(c,d);this.emit(c)}},
+  async merge(c,id,o){const d=this.read(c);d[id]={...(d[id]||{}),...clean(o),id};this.write(c,d);this.emit(c)},
   async listRaw(){return[]},
   subQuery(c,o,cb){return this.sub(c,a=>cb(a.sort((x,y)=>(y[o.orderBy]||0)-(x[o.orderBy]||0)).slice(0,o.limit)))},
   subWhere(c,f,op,v,cb){return this.sub(c,a=>cb(a.filter(x=>op==='array-contains'?(x[f]||[]).includes(v):op==='in'?v.includes(x[f]):x[f]===v)))},
@@ -376,6 +401,7 @@ const Local={
   async getOne(c,id){const d=this.read(c)[id];return d?{...d}:null},
   async createLogin(){throw new Error('Employee logins need the online database.')}
 };
+addEventListener('storage',e=>{if(typeof store!=='undefined'&&store===Local&&e.key&&e.key.startsWith('gdt_')&&Local.subs[e.key.slice(4)])Local.emit(e.key.slice(4))});
 /* ---------- data layer: Firestore ---------- */
 async function makeCloud(cfg){
   const B=`https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
@@ -393,6 +419,7 @@ async function makeCloud(cfg){
     sub:(c,cb,err)=>F.onSnapshot(F.collection(db,P+c),s=>cb(docs(s),s.metadata.fromCache),err),
     subOne:(c,id,cb,err)=>F.onSnapshot(F.doc(db,P+c,id),s=>cb(s.exists()?{...s.data(),id:s.id}:null),err),
     patch:(c,id,o)=>F.updateDoc(F.doc(db,P+c,id),clean(o)),
+    merge:(c,id,o)=>F.setDoc(F.doc(db,P+c,id),clean(o),{merge:true}),
     listRaw:async name=>docs(await F.getDocs(F.collection(db,name))),
     subQuery:(c,o,cb,err)=>F.onSnapshot(F.query(F.collection(db,P+c),F.orderBy(o.orderBy,'desc'),F.limit(o.limit)),s=>cb(docs(s)),err),
     subWhere:(c,f,op,v,cb,err)=>F.onSnapshot(F.query(F.collection(db,P+c),F.where(f,op,v)),s=>cb(docs(s)),err),
@@ -416,6 +443,7 @@ function cloudConfig(){
 /* ---------- boot & sign-in ---------- */
 let unsubs=[],hb=null;
 function detach(){unsubs.forEach(u=>{try{u()}catch{}});unsubs=[];clearInterval(hb);hb=null;
+  liveReset();
   Object.assign(S,{orders:[],stock:[],settings:null,audit:[],presence:[],staff:[],team:[],reminders:[],adminCfg:null,mig:{},staffLive:false,teamLive:false})}
 function attach(){
   const err=e=>{S.err=e.message||String(e);toast('Sync problem: '+S.err)};
@@ -426,13 +454,15 @@ function attach(){
     ['orders','stock'].forEach(c=>S.me.stores.slice(0,10).forEach(id=>unsubs.push(store.subWhere(c,'storeId','==',id,a=>{parts[c][id]=a;S[c]=Object.values(parts[c]).flat();render()},err))));
   }else{on('orders','orders',null,(a,fc)=>migrate('orders',a,fc));on('stock','stock',null,(a,fc)=>migrate('stock',a,fc))}
   on('settings','settings',a=>a.find(x=>x.id==='main')||null);
-  if(isManager()){unsubs.push(store.subQuery('audit',{orderBy:'at',limit:300},a=>{S.audit=a;render()},err));unsubs.push(store.sub('presence',a=>{S.presence=a;   // live view: refresh Home/Activity without disturbing your own typing
+  if(isManager()){unsubs.push(store.subQuery('audit',{orderBy:'at',limit:300},a=>{S.audit=a;if(WATCH.open)watchUpdate();else render()},err));unsubs.push(store.sub('presence',a=>{S.presence=a;   // live view: refresh Home/Activity without disturbing your own typing
+      if(WATCH.open){watchUpdate();return}
       if(['home','activity'].includes(S.view)&&!document.querySelector('#sheet.open')&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))render()},err));on('reminders','reminders');
     unsubs.push(store.sub('team',(a,fc)=>{S.team=a;if(!fc)S.teamLive=true;syncTeam();render()},()=>{}))}
   if(isAdmin()){on('staff','staff',null,(a,fc)=>{if(!fc)S.staffLive=true;syncTeam()});on('admin','adminCfg',a=>a.find(x=>x.id==='config')||null)}
   /* employees: if the admin switches the login off or changes role/stores, apply it straight away */
   if(!isAdmin()&&S.me&&store.subOne)unsubs.push(store.subOne('staff',S.me.uid,d=>{
     if(!d||d.active!==true){S.loginErr='Your login was switched off. Ask your manager.';store.signOut&&store.signOut();return}
+    liveWatch(d.watchUntil);
     const ns=Array.isArray(d.stores)?d.stores:[];
     if((d.role||'staff')!==S.me.role||JSON.stringify(ns)!==JSON.stringify(S.me.stores||[])||(d.name&&d.name!==S.me.name)){
       Object.assign(S.me,{role:d.role||'staff',stores:ns,name:d.name||S.me.name,email:d.email||''});detach();attach();render()}
@@ -465,11 +495,165 @@ function doingNow(){
 let lastDoing='',beatT=0;
 function beat(){if(!S.me||isAdmin()||store.mode!=='cloud')return;
   const doing=document.hidden?'':doingNow();lastDoing=doing;
-  write(()=>store.put('presence',S.me.uid,{code:S.me.code,name:S.me.name,role:S.me.role,view:S.view,store:allStores().length>1&&curStore()!=='all'?storeName(curStore()):'',
+  write(()=>store.merge('presence',S.me.uid,{code:S.me.code,name:S.me.name,role:S.me.role,view:S.view,store:allStores().length>1&&curStore()!=='all'?storeName(curStore()):'',
     doing,doingAt:doing?Date.now():0,away:!!document.hidden,lastSeen:Date.now()}))}
 /* send an update shortly after the employee changes something, at most about once a second */
-function beatSoon(){if(!S.me||isAdmin()||store.mode!=='cloud')return;clearTimeout(beatT);beatT=setTimeout(()=>{if(doingNow()!==lastDoing)beat()},900)}
-document.addEventListener('visibilitychange',()=>{if(S.boot==='ready')beat()});
+function beatSoon(){liveKick();if(!S.me||isAdmin()||store.mode!=='cloud')return;clearTimeout(beatT);beatT=setTimeout(()=>{if(doingNow()!==lastDoing)beat()},900)}
+document.addEventListener('visibilitychange',()=>{if(S.boot==='ready'){beat();liveKick(0)}});
+
+/* ---------- live screen ----------
+   While the admin has "Watch screen" open, the admin's app keeps a watchUntil time on the employee's staff record.
+   The employee's app sees it and sends a copy of its own screen (this app only, never the rest of the device),
+   about once a second when something changes. Nothing appears on the employee's screen.
+   Sending stops by itself within a minute of the admin closing the viewer. */
+const LIVE={on:false,until:0,seenUntil:0,stopT:0,sendT:0,lastAt:0,lastKey:'',ptr:null};
+const SCROLLERS='.tablewrap,#sheet .panel';
+function liveWatch(until){
+  until=Number(until)||0;clearTimeout(LIVE.stopT);
+  /* each new signal from the admin keeps it going for 55 seconds on this device's own clock (phones' clocks can differ) */
+  const fresh=until>Date.now()-120000;
+  if(fresh&&until!==LIVE.seenUntil){LIVE.seenUntil=until;LIVE.until=Date.now()+55000}else if(!fresh)LIVE.until=0;
+  const on=LIVE.until>Date.now();
+  if(on){if(!LIVE.on){LIVE.on=true;LIVE.lastKey='';liveKick(0)}LIVE.stopT=setTimeout(()=>liveWatch(LIVE.seenUntil),LIVE.until-Date.now()+500)}
+  else if(LIVE.on){LIVE.on=false;clearTimeout(LIVE.sendT);LIVE.sendT=0;if(S.me)write(()=>store.merge('presence',S.me.uid,{screen:null,screenAt:0}))}
+}
+function liveReset(){LIVE.on=false;clearTimeout(LIVE.sendT);clearTimeout(LIVE.stopT);LIVE.sendT=0}
+function liveKick(delay){
+  if(!LIVE.on||LIVE.sendT)return;
+  LIVE.sendT=setTimeout(liveSend,Math.max(delay??350,1000-(Date.now()-LIVE.lastAt)));
+}
+function snapshotScreen(){
+  const body=document.body,clone=body.cloneNode(true);
+  const a=body.querySelectorAll('input,select,textarea'),b=clone.querySelectorAll('input,select,textarea');
+  a.forEach((el,i)=>{const d=b[i];if(!d)return;
+    if(el.type==='checkbox'||el.type==='radio'){if(el.checked)d.setAttribute('checked','');else d.removeAttribute('checked')}
+    else if(el.tagName==='SELECT')[...d.options].forEach((o,j)=>{if(el.options[j]&&el.options[j].selected)o.setAttribute('selected','');else o.removeAttribute('selected')});
+    else if(el.tagName==='TEXTAREA')d.textContent=el.value;
+    else if(el.type==='password')d.setAttribute('value','•'.repeat(Math.min((el.value||'').length,8)));
+    else if(el.type!=='file')d.setAttribute('value',el.value);
+    if(el===document.activeElement)d.setAttribute('data-rwfocus','');
+  });
+  clone.querySelectorAll('script,noscript,iframe,#watch').forEach(n=>n.remove());
+  const sc=[...body.querySelectorAll(SCROLLERS)].map(el=>[Math.round(el.scrollTop),Math.round(el.scrollLeft)]);
+  return{html:clone.innerHTML,meta:{w:innerWidth,h:innerHeight,sy:Math.round(scrollY),sc,cls:body.className,ptr:LIVE.ptr,view:S.view,hidden:document.hidden}};
+}
+async function packText(t){
+  if(typeof CompressionStream==='function'){try{
+    const buf=new Uint8Array(await new Response(new Blob([t]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+    let bin='';for(let i=0;i<buf.length;i+=0x8000)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
+    return{enc:'gz',data:btoa(bin)};
+  }catch(e){}}
+  return{enc:'raw',data:t};
+}
+async function unpackText(enc,data){
+  if(enc!=='gz')return data;
+  const bin=atob(data);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+}
+async function liveSend(){
+  LIVE.sendT=0;if(!LIVE.on||!S.me)return;
+  try{
+    const snap=snapshotScreen();const meta=JSON.stringify(snap.meta);
+    const key=hash(snap.html)+'|'+snap.html.length+'|'+meta;
+    if(key===LIVE.lastKey)return;
+    LIVE.lastKey=key;LIVE.lastAt=Date.now();
+    const p=await packText(snap.html);
+    if(p.data.length>900000)return;
+    await store.merge('presence',S.me.uid,{screen:{meta,enc:p.enc,data:p.data},screenAt:Date.now(),lastSeen:Date.now()});
+  }catch(e){}
+}
+document.addEventListener('scroll',()=>liveKick(),{capture:true,passive:true});
+document.addEventListener('pointerdown',e=>{if(!LIVE.on)return;LIVE.ptr={x:Math.round(e.clientX),y:Math.round(e.clientY),t:Date.now(),down:1};liveKick(0)},{capture:true,passive:true});
+document.addEventListener('pointermove',e=>{if(!LIVE.on||e.pointerType!=='mouse')return;LIVE.ptr={x:Math.round(e.clientX),y:Math.round(e.clientY),t:Date.now()};liveKick()},{capture:true,passive:true});
+
+/* ---------- the admin's viewer ---------- */
+const WATCH={open:false,all:false,ids:[],focus:null,beatT:0,tickT:0,seen:{},seq:{}};
+const watchable=()=>S.presence.filter(p=>isOnline(p)&&p.id!==S.me?.uid);
+function watchOpen(ids,{all=false,focus=null}={}){
+  if(!isAdmin()||store.mode!=='cloud'&&store.mode!=='local')return;
+  Object.assign(WATCH,{open:true,all,ids:[...new Set(ids)],focus:focus||(ids.length===1?ids[0]:null),seen:{},seq:{}});
+  let w=$('#watch');if(!w){w=document.createElement('div');w.id='watch';document.body.appendChild(w)}
+  w.className='open';document.body.classList.add('lock');
+  watchBeat();clearInterval(WATCH.beatT);WATCH.beatT=setInterval(watchBeat,20000);
+  clearInterval(WATCH.tickT);WATCH.tickT=setInterval(watchUpdate,2000);
+  watchLayout();watchUpdate();
+}
+function watchBeat(){const until=Date.now()+50000;WATCH.ids.forEach(id=>{if(S.staff.some(x=>x.id===id))write(()=>store.patch('staff',id,{watchUntil:until}))})}
+function watchClose(){
+  clearInterval(WATCH.beatT);clearInterval(WATCH.tickT);
+  WATCH.ids.forEach(id=>{if(S.staff.some(x=>x.id===id))write(()=>store.patch('staff',id,{watchUntil:0}))});
+  Object.assign(WATCH,{open:false,ids:[],focus:null});
+  const w=$('#watch');if(w){w.className='';w.innerHTML=''}document.body.classList.remove('lock');render();
+}
+function watchLayout(){
+  const w=$('#watch');if(!w)return;
+  const ids=WATCH.focus?[WATCH.focus]:WATCH.ids;
+  const P=id=>S.presence.find(p=>p.id===id)||{};
+  w.innerHTML=`<div class="wbar"><span class="wlive">● LIVE</span><b>${WATCH.focus?esc(P(WATCH.focus).name||'Employee'):`${ids.length} screen${ids.length===1?'':'s'}`}</b>
+    <span class="muted small wsub">Only you can see this. Nothing shows on their screen.</span>
+    ${WATCH.focus&&WATCH.ids.length>1?'<button class="btn sm sec" data-act="watch-grid">All screens</button>':''}
+    <button class="btn sm" data-act="watch-close">Close</button></div>
+  <div class="wbody ${WATCH.focus?'one':'grid'}">
+    ${ids.length?ids.map(id=>`<div class="wtile" data-id="${esc(id)}">
+      <div class="wtop"><span class="dot"></span><b class="wname">${esc(P(id).name||'')}</b><span class="wmeta muted small"></span>
+        ${WATCH.focus?'':`<button class="btn sm sec" data-act="watch-focus" data-id="${esc(id)}">Enlarge</button>`}</div>
+      <div class="wscreen"><div class="wscale"><iframe sandbox="allow-same-origin" tabindex="-1" title="Live screen" aria-hidden="true"></iframe></div><div class="wmsg">Connecting… their screen appears in a few seconds.</div></div>
+      <div class="wdoing"></div></div>`).join('')
+      :'<div class="card empty" style="color:var(--ink)">Nobody is online right now. Screens appear here when employees open the app.</div>'}
+    ${WATCH.focus?`<div class="wside"><h2>Their recent changes</h2><div class="wchanges"></div></div>`:''}
+  </div>`;
+}
+const WATCH_CSS=`[data-rwfocus]{outline:3px solid #e11d48!important;outline-offset:2px;box-shadow:0 0 0 7px rgba(225,29,72,.22)!important}
+.rwptr{position:fixed;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:rgba(225,29,72,.8);border:2px solid #fff;z-index:99999;pointer-events:none;box-shadow:0 0 0 5px rgba(225,29,72,.25)}
+.rwptr.old{opacity:.35}*{animation:none!important;transition:none!important;caret-color:transparent!important}html,body{overflow:hidden!important}`;
+function watchDoc(){const css=document.querySelector('style')?.textContent||'';const font=document.querySelector('link[rel=stylesheet][href*="fonts.googleapis"]')?.href||'';
+  return`<!doctype html><html><head><meta charset="utf-8">${font?`<link rel="stylesheet" href="${esc(font)}">`:''}<style>${css}
+${WATCH_CSS}</style></head><body></body></html>`}
+function cleanScreen(html){
+  const doc=new DOMParser().parseFromString('<!doctype html><body>'+html+'</body>','text/html');
+  doc.querySelectorAll('script,iframe,object,embed,link,meta,base,style,frame,frameset').forEach(n=>n.remove());
+  doc.body.querySelectorAll('*').forEach(el=>{for(const a of [...el.attributes]){const n=a.name.toLowerCase(),v=a.value;
+    if(n.startsWith('on')||/^\s*javascript:/i.test(v)||(/^(src|href|xlink:href|action|formaction|srcset|poster|background)$/.test(n)&&!/^\s*#/.test(v))||(n==='style'&&/url\s*\(|expression\s*\(/i.test(v)))el.removeAttribute(a.name)}});
+  return doc.body.innerHTML;
+}
+function watchUpdate(){
+  if(!WATCH.open)return;
+  if(WATCH.all){const on=watchable().map(p=>p.id).filter(id=>!WATCH.ids.includes(id));if(on.length){WATCH.ids.push(...on);watchBeat();if(!WATCH.focus){WATCH.seen={};watchLayout()}}}
+  const ids=WATCH.focus?[WATCH.focus]:WATCH.ids;
+  ids.forEach(id=>{
+    const tile=$(`#watch .wtile[data-id="${CSS.escape(id)}"]`);if(!tile)return;
+    const p=S.presence.find(x=>x.id===id)||{};const on=isOnline(p);
+    tile.querySelector('.wname').textContent=p.name||'Employee';
+    tile.querySelector('.dot').className='dot'+(on&&!p.away?'':' idle');
+    tile.querySelector('.wmeta').textContent=[p.code,on?(p.away?'app in background':'on '+(PAGE[p.view]||p.view||'')):'offline',p.store,p.screenAt?'updated '+ago(p.screenAt):''].filter(Boolean).join(' · ');
+    tile.querySelector('.wdoing').innerHTML=p.doing?`<b>Doing:</b> ${esc(p.doing)}`:'';
+    const msg=tile.querySelector('.wmsg');
+    if(!on)msg.textContent='They are offline. Their screen shows again when they open the app.';
+    else if(!p.screen)msg.textContent=Date.now()-(WATCH.openedAt||0)>15000?'No picture yet. Their app may still be an older version: it updates next time they open it.':'Connecting… their screen appears in a few seconds.';
+    if(p.screen&&p.screenAt!==WATCH.seen[id]){WATCH.seen[id]=p.screenAt;watchPaint(id,p,tile)}
+  });
+  if(WATCH.focus){const box=$('#watch .wchanges');const pr=S.presence.find(x=>x.id===WATCH.focus);
+    if(box){const list=S.audit.filter(a=>a.byUid===WATCH.focus).slice(0,25);
+      box.innerHTML=list.length?list.map(a=>`<div class="wchg"><b>${esc(a.action)}</b> <span class="muted small">${ago(a.at)}</span><div class="small">${esc(String(a.summary||'').slice(0,140))}</div></div>`).join(''):'<p class="muted small">No saved changes yet.</p>'}}
+}
+async function watchPaint(id,p,tile){
+  const seq=(WATCH.seq[id]||0)+1;WATCH.seq[id]=seq;
+  let html,meta;try{meta=JSON.parse(p.screen.meta||'{}');html=cleanScreen(await unpackText(p.screen.enc,p.screen.data))}catch(e){return}
+  if(WATCH.seq[id]!==seq||!tile.isConnected)return;
+  const fr=tile.querySelector('iframe');
+  if(!fr.dataset.ready){await new Promise(r=>{fr.onload=r;fr.srcdoc=watchDoc()});fr.dataset.ready='1'}
+  const d=fr.contentDocument;if(!d||!d.body)return;
+  d.body.className=String(meta.cls||'');d.body.innerHTML=html;
+  if(meta.ptr&&Date.now()-meta.ptr.t<6000){const dot=d.createElement('div');dot.className='rwptr'+(Date.now()-meta.ptr.t>2500?' old':'');dot.style.left=(+meta.ptr.x||0)+'px';dot.style.top=(+meta.ptr.y||0)+'px';d.body.appendChild(dot)}
+  const W=Math.max(320,+meta.w||390),H=Math.max(300,+meta.h||700);
+  const box=tile.querySelector('.wscreen'),sc=tile.querySelector('.wscale');
+  const maxH=WATCH.focus?Math.max(260,innerHeight-150):520;
+  const k=Math.min(1,box.clientWidth/W,maxH/H);
+  fr.style.width=W+'px';fr.style.height=H+'px';sc.style.transform=`scale(${k})`;box.style.height=Math.round(H*k)+'px';box.style.width=Math.round(W*k)+'px';
+  try{fr.contentWindow.scrollTo(0,+meta.sy||0)}catch(e){}
+  const els=[...d.querySelectorAll(SCROLLERS)];(meta.sc||[]).forEach((v,i)=>{if(els[i]){els[i].scrollTop=v[0];els[i].scrollLeft=v[1]}});
+  tile.querySelector('.wmsg').textContent=meta.hidden?'Their app is in the background right now.':'';
+}
 /* orders and stock saved before stores existed belong to the first store (admin does this once, from fresh server data only) */
 function migrate(c,a,fromCache){
   if(!isAdmin()||fromCache||S.mig[c])return;S.mig[c]=true;
@@ -668,6 +852,7 @@ function render(){
     }
     S.focusKey=null;
   }
+  liveKick();
 }
 function navItems(){
   const n=[['home','Home','home'],['orders','Orders','list'],['stock','Stock','box'],['customers','Customers','users']];
@@ -764,7 +949,7 @@ function liveBand(){
   if(!isManager())return'';const on=S.presence.filter(isOnline).sort((a,b)=>b.lastSeen-a.lastSeen);if(!on.length)return'';
   return`<div class="banner info liveband"><b><span class="dot"></span>${on.length} online now</b>
     ${on.slice(0,4).map(p=>`<span class="who">${esc(p.name)}${p.doing?': <span class="muted">'+esc(p.doing.slice(0,60))+(p.doing.length>60?'…':'')+'</span>':p.away?' <span class="muted">(away)</span>':''}</span>`).join('')}
-    <button class="btn sm sec" style="margin-left:auto" data-act="nav" data-v="activity">Watch live</button></div>`;
+    <span style="margin-left:auto" class="row">${isAdmin()?'<button class="btn sm" data-act="watch-all">Watch screens</button>':''}<button class="btn sm sec" data-act="nav" data-v="activity">${isAdmin()?'Activity':'Watch live'}</button></span></div>`;
 }
 function byStoreHtml(){
   const rows=stores().map(s=>{const os=S.orders.filter(o=>!o.deleted&&sid(o)===s.id);const op=os.filter(inPeriod);
@@ -1030,7 +1215,7 @@ function liveCard(p){
     <div class="meta">${p.away?'App in the background':'On '+(PAGE[p.view]||esc(p.view||''))}${p.store?' · '+esc(p.store):''} · ${ago(p.lastSeen)}</div>
     ${p.doing?`<div class="doing ${fresh?'now':''}">${fresh?'<span class="typing">● now</span> ':''}${esc(p.doing)}</div>`:''}
     ${ls?`<div class="meta">Last saved: ${esc(ls.action)} · ${esc(String(ls.summary||'').slice(0,90))} · ${ago(ls.at)}</div>`:''}
-  </div><button class="btn sm sec" data-act="act-who" data-v="${esc(whoLabel({code:p.code,name:p.name,role:p.role}))}">Their changes</button></div>`;
+  </div><div class="row" style="flex-direction:column;align-items:stretch;gap:6px">${isAdmin()?`<button class="btn sm" data-act="watch" data-id="${esc(p.id)}">Watch screen</button>`:''}<button class="btn sm sec" data-act="act-who" data-v="${esc(whoLabel({code:p.code,name:p.name,role:p.role}))}">Their changes</button></div></div>`;
 }
 function activityHtml(){
   if(!isManager())return'<div class="card empty">Only managers can see activity.</div>';
@@ -1041,7 +1226,7 @@ function activityHtml(){
   const items=S.audit.filter(a=>(S.act.who==='all'||whoLabel(a.by)===S.act.who)&&(cs==='all'||!a.storeId||a.storeId===cs));
   return`<h1>Activity</h1>
   <p class="muted small">Live: this page updates by itself as people work, including forms they are filling in before they save. Watching does not interrupt them.</p>
-  <h2>Online now${online.length?` (${online.length})`:''}</h2>
+  <div class="row"><h2 style="margin-right:auto">Online now${online.length?` (${online.length})`:''}</h2>${isAdmin()&&online.length?'<button class="btn sm" data-act="watch-all">Watch all screens</button>':''}</div>
   ${online.length?`<div class="list">${online.map(liveCard).join('')}</div>`:'<div class="card empty">No employees online right now.</div>'}
   ${recent.length?`<h2>Earlier today</h2><div class="list">${recent.map(p=>`<div class="li"><div class="grow"><b>${esc(p.name)}</b> <span class="muted small">${esc(p.code)}</span><div class="meta">Last seen ${ago(p.lastSeen)} on ${PAGE[p.view]||esc(p.view||'')}${p.store?' · '+esc(p.store):''}</div></div><button class="btn sm sec" data-act="act-who" data-v="${esc(whoLabel({code:p.code,name:p.name,role:p.role}))}">Their changes</button></div>`).join('')}</div>`:''}
   <h2>Recent changes</h2>
@@ -1734,6 +1919,11 @@ document.addEventListener('click',async ev=>{
   switch(a){
     case'nav':closeSheet();S.view=t.dataset.v;render();scrollTo(0,0);beat();break;
     case'store':S.store=t.dataset.v;lsSet('gdt_store',S.store);render();beat();break;
+    case'watch':WATCH.openedAt=Date.now();watchOpen([id]);break;
+    case'watch-all':WATCH.openedAt=Date.now();watchOpen(watchable().map(p=>p.id),{all:true});break;
+    case'watch-focus':WATCH.focus=id;WATCH.seen={};watchLayout();watchUpdate();break;
+    case'watch-grid':WATCH.focus=null;WATCH.seen={};watchLayout();watchUpdate();break;
+    case'watch-close':watchClose();break;
     case'store-new':storeSheet();break;
     case'store-edit':storeSheet(id);break;
     case'rw-stores':rwStoresSheet();break;
@@ -1801,6 +1991,7 @@ document.addEventListener('focusin',ev=>{
 });
 document.addEventListener('keydown',ev=>{
   const el=ev.target;
+  if(ev.key==='Escape'&&WATCH.open&&!$('#sheet').classList.contains('open')){watchClose();return}
   if(ev.key==='Escape'&&$('#sheet').classList.contains('open')&&!$('#dlg').classList.contains('open'))closeSheet();
   if((ev.key==='Enter'||ev.key===' ')&&(el.classList?.contains('ocard')||el.tagName==='LABEL'&&el.classList.contains('btn'))){ev.preventDefault();el.click()}
   if(ev.key==='Enter'&&el.classList?.contains('cell')&&el.tagName==='INPUT'){
@@ -1890,7 +2081,8 @@ document.addEventListener('submit',ev=>{
 });
 addEventListener('online',()=>{S.online=true;if(S.boot==='ready')render()});
 addEventListener('offline',()=>{S.online=false;if(S.boot==='ready')render()});
-setInterval(()=>{if(S.boot==='ready'&&!document.querySelector('#sheet.open')&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))render()},60000);
+addEventListener('resize',()=>{if(WATCH.open){WATCH.seen={};watchUpdate()}liveKick()});
+setInterval(()=>{if(S.boot==='ready'&&!WATCH.open&&!document.querySelector('#sheet.open')&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))render()},60000);
 
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 boot();
