@@ -189,6 +189,7 @@ const ICON = {
   gas:'<path d="M12 3s5 4.5 5 9a5 5 0 0 1-10 0c0-1.7.8-3.3 1.7-4.5C9.7 8.8 12 7 12 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   cash:'<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M9.5 10.2c0-1 1.1-1.7 2.5-1.7s2.5.6 2.5 1.7-1 1.5-2.5 1.8-2.5.8-2.5 1.9 1.1 1.6 2.5 1.6 2.5-.6 2.5-1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   docs:'<path d="M7 3h6l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13 3v4h4M9 13h6M9 16h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  orders:'<path d="M4 5h2l2 10h9l2-7H7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19" r="1.5" fill="currentColor"/><circle cx="16.5" cy="19" r="1.5" fill="currentColor"/>',
   admin:'<path d="M12 3l7 3v5c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
 };
 // key, flag column, title, subtitle, where it opens, tint
@@ -196,6 +197,7 @@ const APPS = [
   { key:'rota', flag:'can_see_rota', title:'Rota',      sub:'Shifts, attendance & leave',  src:'/rota/',        tint:'#2b5ce6' },
   { key:'gas',  flag:'can_see_gas',  title:'Gas Deliveries', sub:'Orders, stock & rounds', src:'/gas/',         tint:'#e8743b' },
   { key:'cash', flag:'can_see_cash', title:'Cash Up',   sub:'Daily cash reconciliation',   src:'/rota/#cash',   tint:'#1f9d61' },
+  { key:'orders', flag:'can_see_orders', title:'Goods Orders', sub:'What to order, stock & levels', src:'/orders/',  tint:'#0e9aa7' },
   { key:'docs', flag:'can_see_docs', title:'Documents', sub:'Merge, edit & sign files',     src:'/sheaf/',       tint:'#7a5af8' },
 ];
 
@@ -231,7 +233,7 @@ function makeSupabaseApi(){
     },
     async staff(){
       const { data, error } = await sb.from('employees')
-        .select('id,employee_code,name,store_id,is_admin,is_manager,active,can_see_gas,can_see_docs,can_see_cash,can_see_files,can_see_rota,auth_user_id')
+        .select('id,employee_code,name,store_id,is_admin,is_manager,active,can_see_gas,can_see_docs,can_see_cash,can_see_files,can_see_rota,can_see_orders,auth_user_id')
         .order('name');
       if(error) throw new Error(error.message); return data||[];
     },
@@ -380,7 +382,7 @@ async function renderAdmin(){
   // --- staff table ---
   const cols = APPS.map(a=>a); // gas, cash, docs, rota + files extra
   const head = '<tr><th>Person</th><th>Store</th>'
-    + '<th class="c">Rota</th><th class="c">Gas</th><th class="c">Cash</th><th class="c">Docs</th><th class="c">Files</th>'
+    + '<th class="c">Rota</th><th class="c">Gas</th><th class="c">Cash</th><th class="c">Orders</th><th class="c">Docs</th><th class="c">Files</th>'
     + '<th class="c">Role</th><th class="c">Active</th><th class="c">Manage</th></tr>';
   const rows = state.staff.map(e=>{
     const sw=(field)=> '<label class="sw"><input type="checkbox" data-emp="'+e.id+'" data-field="'+field+'"'
@@ -396,6 +398,7 @@ async function renderAdmin(){
       + '<td class="c">'+sw('can_see_rota')+'</td>'
       + '<td class="c">'+sw('can_see_gas')+'</td>'
       + '<td class="c">'+sw('can_see_cash')+'</td>'
+      + '<td class="c">'+sw('can_see_orders')+'</td>'
       + '<td class="c">'+sw('can_see_docs')+'</td>'
       + '<td class="c">'+sw('can_see_files')+'</td>'
       + '<td class="c">'+role+'</td>'
