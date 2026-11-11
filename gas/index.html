@@ -1200,7 +1200,9 @@ function stockHtml(){
    <button class="btn sec" data-act="stock-new" data-t="adjust">Adjust (breakage, returns)</button></div>
   <div class="row wrap" style="margin-top:8px"><label class="btn sm sec" for="stockxl" tabindex="0">Import stock from Excel</label><input id="stockxl" class="vh" type="file" accept=".xlsx,.xlsm,.xls,.csv">
    <label class="btn sm sec" for="stockpdf" tabindex="0">Import from PDF (delivery note)</label><input id="stockpdf" class="vh" type="file" accept="application/pdf,.pdf">
-   <button class="btn sm sec" data-act="stock-template">Download stock template</button></div>`:'<p class="muted small">Only a manager can record stock. Your sales and deliveries reduce stock automatically.</p>'}
+   <label class="btn sm sec" for="stockany" tabindex="0">Import from a photo or any file</label><input id="stockany" class="vh" type="file" accept="image/*,application/pdf,.pdf,.xlsx,.xlsm,.xls,.csv,.txt">
+   <button class="btn sm sec" data-act="stock-template">Download stock template</button></div>
+  <p class="muted small" style="margin-top:6px">Take a photo of the delivery note, or pick a PDF, Excel, CSV or text file. You check the numbers before anything is saved.</p>`:'<p class="muted small">Only a manager can record stock. Your sales and deliveries reduce stock automatically.</p>'}
   ${S.sv==='ledger'?(all?`<div class="card"><p style="margin-top:0">Each store has its own ledger. Choose a store:</p><div class="chips">${stores().map(s=>`<button class="chip" data-act="store" data-v="${esc(s.id)}">${esc(s.name)}</button>`).join('')}</div></div>`
    :`<h2>Every movement, newest first</h2><p class="muted small" style="margin-top:-4px">Balance after each movement, like the TOTAL STOCK column in your spreadsheet.</p>${ledgerHtml(L)}`):
   `${stockCards(sn)}${all?stockByStore(sn):''}
@@ -1655,7 +1657,8 @@ function reviewSheet(entries,source){
      ${multi()?`<div><label class="l">Store</label><select class="in" name="st_${i}">${storeOpts(e.storeId)}</select></div>`:''}
      <div class="rgrid">${ps.map(p=>`<label>${cyl(p.group)}${esc(p.label)} <span class="muted" style="font-size:11px">${esc(p.group)}</span><input type="number" step="1" name="q_${i}_${p.id}" value="${e.items[p.id]??''}"></label>`).join('')}</div>
      <div><label class="l">Notes</label><input class="in" name="n_${i}" value="${esc(e.notes)}"></div>
-     ${e.found&&e.found.length?`<details><summary class="small muted">Lines matched in the file (${e.found.length})</summary><div class="small muted">${e.found.map(x=>`${esc(x.product)} = <b>${x.qty}</b> ← “${esc(x.line)}”`).join('<br>')}</div></details>`:''}
+     ${e.found&&e.found.some(x=>x.unsure)?`<p class="small" style="color:var(--bad);margin:6px 0"><b>Check these:</b> the amount could not be read for ${e.found.filter(x=>x.unsure).map(x=>esc(x.product)).join(', ')}. Type it in yourself.</p>`:''}
+     ${e.found&&e.found.length?`<details ${e.found.some(x=>x.unsure)?'open':''}><summary class="small muted">Lines matched in the file (${e.found.length})</summary><div class="small muted">${e.found.map(x=>`${esc(x.product)} = <b>${x.qty}</b> ← “${esc(x.line)}”`).join('<br>')}</div></details>`:''}
    </div>`).join('')}
    <div class="sticky-foot"><button type="button" class="btn sec" data-act="close-sheet">Cancel</button><button class="btn" type="submit">Save ${S.review.entries.length>1?S.review.entries.length+' entries':'stock'}</button></div></form>`,true);
 }
@@ -1786,6 +1789,7 @@ function parseStockLines(lines){
     let q=qm?+qm[1]:null;
     if(q==null){const nums=[...rest.matchAll(/(?<![A-Za-z\d.,£$€\/])(\d{1,3})(?![A-Za-z\d.,%\/])/g)].map(m=>+m[1]);q=nums.find(n=>n>0)}
     if(q&&q>0&&q<1000){items[p.id]=(items[p.id]||0)+q;found.push({line:raw.trim(),product:pName(p),qty:q})}
+    else found.push({line:raw.trim(),product:pName(p),qty:'?',unsure:true})
   }
   if(!date)for(const raw of lines){const d=parseDate(raw);if(d){date=d;break}}
   return{items,found,date};
@@ -1801,6 +1805,57 @@ async function parseStockPdf(file){
   }
   const r=parseStockLines(lines);
   return{...r,lineCount:lines.length};
+}
+/* ---- Stock from a photo or any file: read the words, pick out the cylinder lines, then let the person check them ---- */
+const loadOcr=()=>loadScript('ocr/tesseract.min.js',()=>!!window.Tesseract).then(()=>window.Tesseract);
+async function ocrLines(sources,onStep){
+  const T=await loadOcr();
+  const w=await T.createWorker('eng',1,{workerPath:'ocr/worker.min.js',corePath:'ocr/',langPath:'ocr/',gzip:true,logger:m=>{if(onStep&&m.status==='recognizing text')onStep(Math.round(m.progress*100))}});
+  const lines=[];
+  try{for(const src of sources){const r=await w.recognize(src);String(r.data.text||'').split(/\r?\n/).forEach(l=>{l=l.replace(/\s+/g,' ').trim();if(l)lines.push(l)})}}
+  finally{await w.terminate()}
+  return lines;
+}
+/* a phone photo is big: shrink it so reading is quick, and turn it upright */
+async function photoCanvas(file){
+  const bmp=await createImageBitmap(file,{imageOrientation:'from-image'}).catch(()=>createImageBitmap(file));
+  const k=Math.min(1,2200/Math.max(bmp.width,bmp.height));const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);return c;
+}
+async function pdfPageCanvases(file,max=3){
+  const pdfjs=await loadPdfJs();const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;const out=[];
+  for(let n=1;n<=Math.min(max,pdf.numPages);n++){const pg=await pdf.getPage(n);const vp=pg.getViewport({scale:2});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;await pg.render({canvasContext:c.getContext('2d'),viewport:vp}).promise;out.push(c)}
+  return out;
+}
+function reviewFromLines(lines,f,how){
+  const r=parseStockLines(lines);
+  reviewSheet([{type:'in',date:r.date||today(),items:r.items,notes:how+' '+f.name,found:r.found}],f.name);
+  if(!r.found.length)toast('No cylinder lines recognised. Fill the numbers in yourself.');
+}
+async function importStockAny(f){
+  const name=f.name.toLowerCase(),isImg=/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic|heif|bmp|gif)$/.test(name);
+  if(/\.(xlsx|xlsm|xls)$/.test(name)){
+    toast('Reading '+f.name+'…');const es=await parseStockExcel(f);
+    if(!es.length){toast('No stock figures found in that file. Try the stock template.');return}
+    reviewSheet(es,f.name);return}
+  if(/\.(csv|txt)$/.test(name)||/^text\//.test(f.type)){
+    const lines=(await f.text()).split(/\r?\n/).map(l=>l.replace(/[,;\t]+/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+    if(!lines.length){toast('That file is empty.');return}
+    reviewFromLines(lines,f,'From');return}
+  if(/\.pdf$/.test(name)||f.type==='application/pdf'){
+    toast('Reading '+f.name+'…');const r=await parseStockPdf(f);
+    if(r.lineCount){reviewSheet([{type:'in',date:r.date||today(),items:r.items,notes:'Delivery note '+f.name,found:r.found}],f.name);if(!r.found.length)toast('No cylinder lines recognised. Fill the numbers in yourself.');return}
+    toast('This PDF is a scan. Reading the words from the picture… this can take a minute');
+    const lines=await ocrLines(await pdfPageCanvases(f),p=>toast('Reading the scan… '+p+'%'));
+    if(!lines.length){toast('Could not read any words in that scan. Enter the stock by hand.');return}
+    reviewFromLines(lines,f,'Scanned delivery note');return}
+  if(isImg){
+    if(/\.(heic|heif)$/.test(name)){toast('That photo format (HEIC) can’t be read here. Take the photo with the button again, or send it as JPG.');return}
+    toast('Reading the photo… this can take a minute');
+    const lines=await ocrLines([await photoCanvas(f)],p=>toast('Reading the photo… '+p+'%'));
+    if(!lines.length){toast('Could not read any words in that photo. Try a closer, sharper photo in good light.');return}
+    reviewFromLines(lines,f,'Photo of delivery note');return}
+  toast('That type of file can’t be read. Use a photo, PDF, Excel, CSV or text file.');
 }
 async function importExcel(file,st){
   st=st||defStore();const byName={};allStores().forEach(x=>byName[x.name.trim().toLowerCase()]=x.id);
@@ -2058,6 +2113,11 @@ document.addEventListener('change',async ev=>{
     const f=el.files[0];el.value='';toast('Reading '+f.name+'…');
     try{const es=await parseStockExcel(f);if(!es.length){toast('No stock figures found in that file. Try the stock template.');return}reviewSheet(es,f.name)}
     catch(e){toast('Could not read the file: '+e.message)}
+    return;
+  }
+  if(el.id==='stockany'&&el.files[0]){
+    const f=el.files[0];el.value='';
+    try{await importStockAny(f)}catch(e){toast('Could not read that file: '+e.message)}
     return;
   }
   if(el.id==='stockpdf'&&el.files[0]){
