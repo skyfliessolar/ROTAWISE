@@ -1,4 +1,5 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.scan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.scan-page{border:1px solid var(--line,#ddd);border-radius:10px;overflow:hidden;background:#fff}.scan-thumb{width:100%;height:auto;display:block}.scan-bar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px;font-size:12px}.scan-bar span{flex:1;font-weight:600;color:#333}
+</style></head><body>
 <title>Sheaf Document Studio</title>
 <script>
 /* Sheaf lives inside Rotawise (Documents). Opened on its own it goes to Rotawise's Documents section.
@@ -441,6 +442,7 @@ input.fld[type=checkbox]{padding:0;margin:0;accent-color:#2B3FC4}
   .tbar h2{font-size:15px}
 }
 
+.scan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.scan-page{border:1px solid var(--line,#ddd);border-radius:10px;overflow:hidden;background:#fff}.scan-thumb{width:100%;height:auto;display:block}.scan-bar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px;font-size:12px}.scan-bar span{flex:1;font-weight:600;color:#333}
 </style>
 <div id="app">
   <header class="topbar">
@@ -1981,7 +1983,7 @@ const CATS = [
   { id: 'secure', name: 'Protect', sub: 'Passwords, watermarks, numbering', cls: 'c-lock' },
   { id: 'ai', name: 'AI', sub: 'Ask, summarise, translate and read scans', cls: 'c-ai' },
 ];
-function tool(def) { if (NO_AI && def.cat === 'ai') return def; if (def.id === 'edit-any') TOOLS.unshift(def); else TOOLS.push(def); TOOLMAP[def.id] = def; return def; }
+function tool(def) { if (NO_AI && def.cat === 'ai') return def; if (def.id === 'edit-any' || def.id === 'scan') TOOLS.unshift(def); else TOOLS.push(def); TOOLMAP[def.id] = def; return def; }
 if (NO_AI) CATS.splice(CATS.findIndex(c => c.id === 'ai'), 1);
 const views = {}; const instances = {}; const pending = {};
 
@@ -3050,6 +3052,123 @@ function mountOrganize(view, def, mode = 'organize') {
   return { load };
 }
 
+/* ================= Scan paper with the camera ================= */
+const SCAN_OCR = '../gas/ocr/';
+function scanEnhance(src, mode) {
+  // shrink big phone photos, then (for "Clean") turn grey paper white and keep the ink dark
+  const { w, h: hh } = drawableSize(src); const k = Math.min(1, 2200 / Math.max(w, hh));
+  const cv = h('canvas', { width: Math.round(w * k), height: Math.round(hh * k) }); const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(src, 0, 0, cv.width, cv.height);
+  if (mode === 'colour') return cv;
+  const im = cx.getImageData(0, 0, cv.width, cv.height), d = im.data, n = cv.width * cv.height, g = new Uint8Array(n), hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) { const v = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8; g[i] = v; hist[v]++; }
+  if (mode === 'clean') {
+    // paper brightness changes across a photo (shadows), so compare each dot with the paper around it
+    const S = 24, gw = Math.ceil(cv.width / S), gh = Math.ceil(cv.height / S), bg = new Float32Array(gw * gh);
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      const hs = new Uint16Array(256); let c = 0;
+      for (let y = gy * S; y < Math.min(cv.height, gy * S + S); y += 2) for (let x = gx * S; x < Math.min(cv.width, gx * S + S); x += 2) { hs[g[y * cv.width + x]]++; c++; }
+      let acc = 0, v = 255; for (; v > 0; v--) { acc += hs[v]; if (acc > c * 0.2) break; } bg[gy * gw + gx] = Math.max(60, v);
+    }
+    for (let y = 0; y < cv.height; y++) for (let x = 0; x < cv.width; x++) {
+      const fx = Math.min(gw - 1.001, Math.max(0, x / S - 0.5)), fy = Math.min(gh - 1.001, Math.max(0, y / S - 0.5)), x0 = fx | 0, y0 = fy | 0, tx = fx - x0, ty = fy - y0;
+      const b = (bg[y0 * gw + x0] * (1 - tx) + bg[y0 * gw + Math.min(gw - 1, x0 + 1)] * tx) * (1 - ty) + (bg[Math.min(gh - 1, y0 + 1) * gw + x0] * (1 - tx) + bg[Math.min(gh - 1, y0 + 1) * gw + Math.min(gw - 1, x0 + 1)] * tx) * ty;
+      let v = g[y * cv.width + x] / b; v = v > 0.9 ? 255 : Math.max(0, (v - 0.35) / 0.55 * 255);
+      const i = (y * cv.width + x) * 4; d[i] = d[i + 1] = d[i + 2] = v;
+    }
+  } else for (let i = 0; i < n; i++) d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = g[i];
+  cx.putImageData(im, 0, 0); return cv;
+}
+function scanRotate(cv) { const o = h('canvas', { width: cv.height, height: cv.width }); const x = o.getContext('2d'); x.translate(o.width, 0); x.rotate(Math.PI / 2); x.drawImage(cv, 0, 0); return o; }
+async function scanOcr(pages, b) {
+  if (!window.Tesseract) await loadScript(SCAN_OCR + 'tesseract.min.js');
+  const w = await Tesseract.createWorker('eng', 1, { workerPath: SCAN_OCR + 'worker.min.js', corePath: SCAN_OCR, langPath: SCAN_OCR, gzip: true });
+  await w.setParameters({ preserve_interword_spaces: '1' });
+  const out = [];
+  try { let i = 0; for (const p of pages) { i++; if (b) await b.set('Reading the words on page ' + i + ' of ' + pages.length, (i - 0.5) / pages.length); const r = await w.recognize(p.cv); out.push(String(r.data.text || '').replace(/\r/g, '').split('\n').map(l => l.replace(/\s+$/, ''))); } }
+  finally { await w.terminate(); }
+  return out;
+}
+function mountScan(view, def) {
+  const st = { pages: [], mode: 'clean', name: 'Scan ' + new Date().toISOString().slice(0, 10) };
+  const cam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'scan-cam', style: { display: 'none' }, onchange: e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) load(fs); } });
+  const camBtn = btn('Scan a page', { kind: 'primary', icon: 'image', onclick: () => cam.click() });
+  const addBtn = btn('Add photos', { kind: 'ghost', icon: 'plus', onclick: async () => { const fs = await pickFiles({ accept: accepts(['image']), multiple: true }); if (fs.length) load(fs); } });
+  const { body } = toolPage(view, def, [addBtn, camBtn]);
+  const intro = h('div', { class: 'card', style: { textAlign: 'center', padding: '28px 18px' } },
+    h('h2', { style: { margin: '0 0 6px' } }, 'Scan paper with your camera'),
+    h('p', { class: 'side-note', style: { margin: '0 auto 16px', maxWidth: '460px' } }, 'Lay the page flat in good light and fill the screen with it. Add as many pages as you like, then save them as a PDF, a Word document, a spreadsheet or plain text.'),
+    h('div', { style: { display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' } },
+      btn('Open camera', { kind: 'primary', icon: 'image', onclick: () => cam.click() }),
+      btn('Choose photos', { kind: 'ghost', icon: 'upload', onclick: async () => { const fs = await pickFiles({ accept: accepts(['image']), multiple: true }); if (fs.length) load(fs); } })));
+  const card = h('div', { class: 'card' }); card.hidden = true;
+  body.append(cam, intro, card);
+  async function load(files) {
+    await withBusy('Adding pages', async b => { let i = 0; for (const f of files) { i++; await b.set(f.name, i / files.length);
+      try { const bm = await decodeImage(f); st.pages.push({ id: uid(), src: bm, rot: 0, cv: null }); } catch (e) { toast('Could not read ' + f.name, 'bad'); } } });
+    redo();
+  }
+  function redo() { for (const p of st.pages) { let c = scanEnhance(p.src, st.mode); for (let i = 0; i < p.rot; i++) c = scanRotate(c); p.cv = c; } render(); }
+  function render() {
+    const any = st.pages.length > 0; intro.hidden = any; card.hidden = !any; if (!any) return;
+    const modes = [['clean', 'Clean (black on white)'], ['grey', 'Grey'], ['colour', 'Colour']];
+    card.replaceChildren(
+      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' } },
+        h('b', null, st.pages.length + (st.pages.length === 1 ? ' page' : ' pages')),
+        h('span', { style: { flex: '1' } }),
+        ...modes.map(([k, t]) => h('button', { class: 'btn sm ' + (st.mode === k ? 'primary' : 'ghost'), 'data-scanmode': k, onclick: () => { st.mode = k; redo(); } }, t))),
+      h('div', { class: 'scan-grid' }, st.pages.map((p, i) => {
+        const t = h('canvas', { width: p.cv.width, height: p.cv.height, class: 'scan-thumb' }); t.getContext('2d').drawImage(p.cv, 0, 0);
+        return h('div', { class: 'scan-page' }, t, h('div', { class: 'scan-bar' }, h('span', null, 'Page ' + (i + 1)),
+          h('button', { class: 'btn sm ghost', title: 'Turn this page', onclick: () => { p.rot = (p.rot + 1) % 4; redo(); } }, 'Turn'),
+          i > 0 ? h('button', { class: 'btn sm ghost', title: 'Move earlier', onclick: () => { st.pages.splice(i - 1, 0, st.pages.splice(i, 1)[0]); render(); } }, '↑') : null,
+          h('button', { class: 'btn sm ghost', title: 'Remove this page', onclick: () => { st.pages.splice(i, 1); render(); } }, 'Remove')));
+      })),
+      h('label', { class: 'side-note', style: { display: 'block', margin: '14px 0 4px' } }, 'File name'),
+      h('input', { class: 'input', id: 'scan-name', value: st.name, oninput: e => { st.name = e.target.value; } }),
+      h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' } },
+        btn('Save as PDF', { kind: 'primary', icon: 'download', onclick: () => save('pdf') }),
+        btn('Save as Word', { kind: 'ghost', icon: 'download', onclick: () => save('docx') }),
+        btn('Save as Excel', { kind: 'ghost', icon: 'download', onclick: () => save('xlsx') }),
+        btn('Save as text', { kind: 'ghost', icon: 'download', onclick: () => save('txt') }),
+        btn('Save as pictures', { kind: 'ghost', icon: 'download', onclick: () => save('jpg') })),
+      h('p', { class: 'side-note', style: { marginTop: '10px' } }, 'PDF and pictures keep the page exactly as photographed. Word, Excel and text read the words off the page: check them, because handwriting and blurry photos are not read reliably. Everything stays on this device.'));
+  }
+  const jpg = cv => new Promise(r => cv.toBlob(r, 'image/jpeg', 0.85));
+  async function save(kind) {
+    const name = (st.name || 'Scan').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Scan';
+    try {
+      await withBusy('Saving', async b => {
+        if (kind === 'pdf') {
+          await need('pdflib'); const doc = await PDFLib.PDFDocument.create(); let i = 0;
+          for (const p of st.pages) { i++; await b.set('Page ' + i, i / st.pages.length);
+            const img = await doc.embedJpg(await (await jpg(p.cv)).arrayBuffer()); const land = p.cv.width > p.cv.height; const W = land ? 841.89 : 595.28, H = land ? 595.28 : 841.89, m = 12;
+            const k = Math.min((W - 2 * m) / img.width, (H - 2 * m) / img.height); const pg = doc.addPage([W, H]);
+            pg.drawImage(img, { x: (W - img.width * k) / 2, y: (H - img.height * k) / 2, width: img.width * k, height: img.height * k }); }
+          doc.setTitle(name); await saveFile(new Blob([await doc.save()], { type: 'application/pdf' }), name + '.pdf'); return;
+        }
+        if (kind === 'jpg') { let i = 0; for (const p of st.pages) { i++; await saveFile(await jpg(p.cv), name + (st.pages.length > 1 ? ' p' + i : '') + '.jpg'); } return; }
+        const text = await scanOcr(st.pages, b);
+        if (!text.some(pg => pg.some(l => l.trim()))) { toast('No words could be read from these pages. Save as PDF instead, or retake the photo closer and sharper.', 'bad'); return; }
+        if (kind === 'txt') { await saveFile(new Blob([text.map(pg => pg.join('\n').trim()).join('\n\n----------\n\n')], { type: 'text/plain' }), name + '.txt'); return; }
+        if (kind === 'docx') {
+          await need('docx'); const D = window.docx; const kids = [];
+          text.forEach((pg, pi) => { const lines = pg.join('\n').trim().split('\n'); let para = [];
+            const flush = () => { if (para.length) { kids.push(new D.Paragraph({ children: [new D.TextRun(para.join(' ').replace(/\s+/g, ' '))], spacing: { after: 160 }, pageBreakBefore: pi > 0 && !kids._pb })); if (pi > 0) kids._pb = true; para = []; } };
+            kids._pb = false; for (const l of lines) { if (!l.trim()) flush(); else para.push(l.trim()); } flush(); });
+          const doc = new D.Document({ sections: [{ children: kids }] }); await saveFile(await D.Packer.toBlob(doc), name + '.docx'); return;
+        }
+        if (kind === 'xlsx') {
+          await need('xlsx'); const wb = XLSX.utils.book_new();
+          text.forEach((pg, pi) => { const rows = pg.filter(l => l.trim()).map(l => l.trim().split(/\s{2,}|\t+/).map(c => { const t = c.trim(), n = t.replace(/[£$€,]/g, ''); return /^-?\d+(\.\d+)?$/.test(n) && !/^0\d/.test(n) ? Number(n) : t; }));
+            const ws = XLSX.utils.aoa_to_sheet(rows.length ? rows : [['']]); ws['!cols'] = [{ wch: 34 }, { wch: 14 }, { wch: 14 }, { wch: 14 }]; XLSX.utils.book_append_sheet(wb, ws, 'Page ' + (pi + 1)); });
+          await saveFile(new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name + '.xlsx'); return;
+        }
+      });
+    } catch (e) { toast('Could not save: ' + (e && e.message || e), 'bad'); }
+  }
+}
+
 /* ================= Combine images into one picture ================= */
 function mountCombine(view, def) {
   const st = { items: [], layout: 'vertical', cols: 2, gap: 10, bg: '#ffffff', width: 1800, fmt: 'jpg' };
@@ -3516,6 +3635,7 @@ tool({ id: 'organize-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'pages'
 tool({ id: 'merge-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'merge', name: 'Merge files', desc: 'PDF, Word, text, Excel and images into one, with any pages in any order', kw: 'merge combine join append pdf together word docx text excel images pages mix', accepts: ['pdf', 'image', 'word', 'text', 'sheet'], multi: true, mount: (v, d) => mountOrganize(v, d, 'merge') });
 tool({ id: 'split-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'split', name: 'Split PDF', desc: 'Pull out pages or cut a PDF into parts', kw: 'split extract separate pages cut divide', accepts: ['pdf'], mount: mountSplit });
 tool({ id: 'merge-word', cat: 'office', cls: 'c-doc', glyph: 'DOCX', icon: 'merge', name: 'Merge into Word', desc: 'Word, PDF, text, Excel and images into one editable .docx', kw: 'merge word docx combine join documents text editable', accepts: ['pdf', 'image', 'word', 'text', 'sheet'], multi: true, mount: (v, d) => mountOrganize(v, d, 'merge-word') });
+tool({ id: 'scan', cat: 'office', cls: 'c-img', glyph: 'SCAN', icon: 'image', name: 'Scan paper', desc: 'Use the camera to scan pages and save them as PDF, Word, Excel or text', kw: 'scan camera photo paper document receipt invoice pdf word excel text ocr phone', accepts: ['image'], multi: true, mount: mountScan });
 tool({ id: 'combine-images', cat: 'image', cls: 'c-img', glyph: 'IMG', icon: 'pages', name: 'Combine images', desc: 'Join photos side by side, stacked or in a grid, as one picture', kw: 'merge combine join stitch collage images photos side by side grid one picture', accepts: ['image'], multi: true, mount: mountCombine });
 tool({ id: 'edit-any', cat: 'office', cls: 'c-doc', glyph: 'EDIT', icon: 'edit', name: 'Edit any file', desc: 'Open a PDF, Word, text, spreadsheet or picture in the right editor', kw: 'edit open any file document pdf word text excel picture editor all in one', accepts: ['pdf', 'word', 'text', 'sheet', 'image'], mount: mountEditAny });
 tool({ id: 'rotate-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'rotate', name: 'Rotate PDF', desc: 'Turn some or all pages the right way up', kw: 'rotate turn landscape portrait upside', accepts: ['pdf'], hidden: false, mount: (v, d) => mountOrganize(v, d, 'organize') });
