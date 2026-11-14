@@ -5,14 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Goods Orders</title>
 <meta name="theme-color" content="#14273D">
-<script src="assets/supabase-js.js"></script>
 <style>
-:root{--navy:#14273D;--ink:#14273D;--muted:#5b6b7f;--line:#e4e9f0;--bg:#eef1f6;--card:#fff;--accent:#2b5ce6;--good:#1f9d61;--bad:#d8453c;--warn:#c77d12;--soft:#f3f6fb;--r:14px;--sh:0 1px 2px rgba(20,39,61,.06),0 6px 18px rgba(20,39,61,.07)}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--navy:#0f1d2e;--ink:#eaf1fb;--muted:#9db0c6;--line:#24344a;--bg:#0b141f;--card:#132233;--soft:#1a2c41}}
-:root[data-theme=dark]{--navy:#0f1d2e;--ink:#eaf1fb;--muted:#9db0c6;--line:#24344a;--bg:#0b141f;--card:#132233;--soft:#1a2c41}
+:root{--navy:#14273D;--ink:#14273D;--muted:#5b6b7f;--line:#e4e9f0;--bg:#eef1f6;--card:#fff;--accent:#2b5ce6;--good:#1f9d61;--bad:#d8453c;--warn:#a8610c;--warnbg:#fff4e0;--soft:#f3f6fb;--r:14px;--sh:0 1px 2px rgba(20,39,61,.06),0 6px 18px rgba(20,39,61,.07)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--navy:#0f1d2e;--ink:#eaf1fb;--muted:#9db0c6;--line:#24344a;--bg:#0b141f;--card:#132233;--soft:#1a2c41;--warnbg:#3a2a10;--warn:#f0b35a}}
+:root[data-theme=dark]{--navy:#0f1d2e;--ink:#eaf1fb;--muted:#9db0c6;--line:#24344a;--bg:#0b141f;--card:#132233;--soft:#1a2c41;--warnbg:#3a2a10;--warn:#f0b35a}
 *{box-sizing:border-box}html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:16px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial}
-button,input,select{font:inherit}button{cursor:pointer}
+button,input,select,textarea{font:inherit}button{cursor:pointer}
 .hidden{display:none!important}
 .top{background:var(--navy);color:#fff;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .top h1{font-size:17px;margin:0}
@@ -23,55 +22,70 @@ button,input,select{font:inherit}button{cursor:pointer}
 .tabs button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 15px;font-weight:650;font-size:14.5px;white-space:nowrap}
 .tabs button.on{background:var(--navy);border-color:var(--navy);color:#fff}
 .tabs .cnt{background:var(--bad);color:#fff;border-radius:99px;font-size:11.5px;padding:1px 7px;margin-left:6px}
-main{max-width:980px;margin:0 auto;padding:14px 16px 90px}
+main{max-width:980px;margin:0 auto;padding:14px 16px 110px}
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px}
 .card h2{font-size:16px;margin:0 0 4px}
 .note{color:var(--muted);font-size:13.5px;margin:0 0 10px}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
 .chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:13.5px;font-weight:600}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
-input[type=text],input[type=number],input[type=email],input[type=search],select.f{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
-input:focus,select:focus{outline:none;border-color:var(--accent)}
+input[type=text],input[type=number],input[type=email],input[type=search],select.f,textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}
 .row .nm{flex:1;min-width:0}
-.row .nm b{display:block;overflow:hidden;text-overflow:ellipsis}
-.row .nm small{color:var(--muted)}
+.row .nm b{display:block}
+.row .nm small{color:var(--muted);display:block}
+.pic{width:64px;height:44px;border-radius:8px;object-fit:cover;background:var(--soft);border:1px solid var(--line);flex:none;cursor:zoom-in}
+.pic.none{display:grid;place-items:center;font-size:10px;color:var(--muted);cursor:default;text-align:center;line-height:1.1}
+.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-right:6px}
+.chk{display:block;margin-top:4px;font-size:12.5px;color:var(--warn);background:var(--warnbg);border-radius:7px;padding:3px 7px}
 .cat{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 2px}
-.qty{display:flex;align-items:center;gap:6px}
+.qty{display:flex;align-items:center;gap:6px;flex:none}
 .qty button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--ink);font-size:20px;font-weight:700;line-height:1}
-.qty .n{min-width:30px;text-align:center;font-weight:800;font-size:17px}
+.qty button.plus{background:var(--accent);border-color:var(--accent);color:#fff}
+.qty .n{min-width:28px;text-align:center;font-weight:800;font-size:17px}
 .btn{border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;padding:11px 16px}
 .btn.alt{background:var(--card);color:var(--accent);border:1px solid var(--line)}
 .btn.good{background:var(--good)}
 .btn.sm{padding:7px 11px;font-size:13.5px}
 .btn:disabled{opacity:.5}
 .tag{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}
-.tag.low{background:#fdeceb;color:#9a2a23}.tag.auto{background:#e7f0ff;color:#1f47b8}.tag.ok{background:#e6f6ee;color:#17754a}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tag.low{background:#fdeceb;color:#9a2a23}.tag.new{background:#e7f0ff;color:#1f47b8}.tag.ok{background:#e6f6ee;color:#17754a}.tag.seen{background:var(--soft);color:var(--muted)}
 .grid3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px}
 @media(max-width:560px){.grid3{grid-template-columns:1fr 1fr}.grid3>:first-child{grid-column:1/-1}}
 .num{width:84px!important;text-align:center;padding:9px 6px!important}
 table{width:100%;border-collapse:collapse;font-size:14.5px}
-th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
 th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
 td.r,th.r{text-align:right}
 .bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.flash{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.basket{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:var(--card);border-top:1px solid var(--line);box-shadow:0 -6px 18px rgba(20,39,61,.08)}
+.basket .in{max-width:980px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.basket b{font-size:16px}
+.basket .btn{margin-left:auto}
+.flash{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;z-index:80;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
 .flash.show{opacity:1}
 .empty{color:var(--muted);text-align:center;padding:26px 10px}
-.modal{position:fixed;inset:0;z-index:70;background:rgba(10,20,32,.5);display:grid;place-items:center;padding:16px}
-.sheet{background:var(--card);border-radius:16px;width:100%;max-width:440px;padding:18px;max-height:90vh;overflow:auto}
+.modal{position:fixed;inset:0;z-index:70;background:rgba(10,20,32,.55);display:grid;place-items:center;padding:16px}
+.sheet{background:var(--card);border-radius:16px;width:100%;max-width:520px;padding:18px;max-height:90vh;overflow:auto}
 .sheet h3{margin:0 0 10px}
+.big{max-width:min(92vw,520px);max-height:80vh;border-radius:12px;display:block;margin:0 auto;image-rendering:auto}
 label.l{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:10px 0 5px}
+.sub{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.sub .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sub .hd b{font-size:15px}
+.sub ul{margin:8px 0 0;padding-left:18px}
+.sub li{margin:2px 0}
 #printArea{display:none}
 @media print{
   body{background:#fff;color:#000}
-  .top,.tabs,main,.flash,.modal{display:none!important}
-  #printArea{display:block;padding:10mm;font:12pt/1.4 Arial}
-  #printArea h1{font-size:18pt;margin:0 0 2mm}
+  .top,.tabs,main,.flash,.modal,.basket{display:none!important}
+  #printArea{display:block;padding:10mm;font:11.5pt/1.35 Arial}
+  #printArea h1{font-size:17pt;margin:0 0 2mm}
   #printArea table{width:100%;border-collapse:collapse;margin-top:4mm}
-  #printArea th,#printArea td{border-bottom:1px solid #999;padding:2.2mm 1.5mm;font-size:12pt;color:#000}
+  #printArea th,#printArea td{border-bottom:1px solid #999;padding:2mm 1.5mm;font-size:11pt;color:#000}
+  #printArea img{width:22mm;height:15mm;object-fit:cover}
   #printArea .cat{color:#000;margin-top:5mm;font-size:10pt}
 }
 </style>
@@ -81,106 +95,155 @@ label.l{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:1
 <div class="top"><h1>Goods Orders</h1><select id="storeSel" aria-label="Store"></select></div>
 <div class="tabs" id="tabs"></div>
 <main id="main"><div class="empty">Loading…</div></main>
+<div class="basket hidden" id="basketBar"><div class="in"><div><b id="basketCount"></b><div class="note" style="margin:0">Check it, then send it to your manager.</div></div><button class="btn" id="basketGo">Review &amp; submit</button></div></div>
 <div id="printArea"></div>
 <div class="flash" id="flash"></div>
 <script>
-const SB_URL='https://ukddnulxifhixatpmofz.supabase.co', SB_KEY='sb_publishable_rW6tXWX72TbvHbZvRG8LiQ_yKmLKKFn';
-const CATS=['Grocery','Ambient','Chocolate & sweets','Soft drinks','Alcohol','Tobacco','Household','Other'];
+const CATS=['Electronics','Grocery','Ambient','Chocolate & sweets','Soft drinks','Alcohol','Tobacco','Household','Other'];
 const $=s=>document.querySelector(s);
 function h(tag,attrs,...kids){const el=document.createElement(tag);if(attrs)for(const k in attrs){const v=attrs[k];if(v==null||v===false)continue;if(k==='class')el.className=v;else if(k==='html')el.innerHTML=v;else if(k==='style'&&typeof v==='object')Object.assign(el.style,v);else if(k.slice(0,2)==='on'&&typeof v==='function')el.addEventListener(k.slice(2).toLowerCase(),v);else if(k==='value')el.value=v;else if(k==='checked')el.checked=!!v;else el.setAttribute(k,v===true?'':v)}for(const c of kids.flat(3)){if(c==null||c===false)continue;el.append(c.nodeType?c:document.createTextNode(c))}return el}
-function flash(m){const f=$('#flash');f.textContent=m;f.classList.add('show');clearTimeout(flash.t);flash.t=setTimeout(()=>f.classList.remove('show'),1900)}
+function flash(m){const f=$('#flash');f.textContent=m;f.classList.add('show');clearTimeout(flash.t);flash.t=setTimeout(()=>f.classList.remove('show'),2200)}
 const fmt=n=>{n=Number(n||0);return Number.isInteger(n)?String(n):n.toFixed(2).replace(/0+$/,'').replace(/\.$/,'')};
+const money=n=>n==null||n===''?'':'£'+Number(n).toFixed(2);
 const label=it=>it.name+(it.size?' '+it.size:'');
 const when=iso=>{const d=new Date(iso);return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})};
 
-/* ---------------- data layer (tests replace window.GO_API) ---------------- */
-function makeApi(){
-  const sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
-  const must=r=>{if(r.error)throw new Error(r.error.message);return r.data};
+/* ---------------- data layer: Firebase (tests replace window.GO_API) ----------------
+   Data lives in hub_shops/<space>/go_*: a shop's own space, or 'main' for the business. */
+async function makeApi(){
+  const rw=await import('/fb/rw.js');
+  const w=await rw.whoami(); if(!w||w.kind==='off')return {me:async()=>null};
+  const sp=await rw.space(w.space), now=()=>new Date().toISOString();
+  const byNew=(a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''));
+  const mine=async(c,store)=>(await sp.where(c,'store_id',store));
+  const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined)r[k]=o[k];return r};
   return {
-    async me(){const {data}=await sb.auth.getUser();if(!data||!data.user)return null;return must(await sb.from('employees').select('*').eq('auth_user_id',data.user.id).maybeSingle())},
-    async stores(){return must(await sb.from('stores').select('id,name').order('name'))||[]},
-    async items(store){return must(await sb.from('goods_items').select('*').eq('store_id',store).eq('active',true).order('category').order('name'))||[]},
-    async openRequests(store){return must(await sb.from('goods_requests').select('*').eq('store_id',store).eq('status','open').order('created_at'))||[]},
-    async addItem(row){return must(await sb.from('goods_items').insert(row).select().single())},
-    async updateItem(id,patch){must(await sb.from('goods_items').update(patch).eq('id',id))},
-    async addRequest(row){return must(await sb.from('goods_requests').insert(row).select().single())},
-    async cancelRequest(id){must(await sb.from('goods_requests').update({status:'cancelled'}).eq('id',id))},
-    async setStock(item,qty){must(await sb.rpc('goods_set_stock',{p_item:item,p_qty:qty}))},
-    async createOrder(row,reqIds){const o=must(await sb.from('goods_orders').insert(row).select().single());if(reqIds.length)must(await sb.from('goods_requests').update({status:'ordered',order_id:o.id}).in('id',reqIds));return o},
-    async orders(store){return must(await sb.from('goods_orders').select('*').eq('store_id',store).order('created_at',{ascending:false}).limit(30))||[]},
-    async getEmails(){const {data}=await sb.from('app_settings').select('value').eq('key','goods_email').maybeSingle();return (data&&data.value)||{}},
-    async setEmails(v){must(await sb.from('app_settings').upsert({key:'goods_email',value:v},{onConflict:'key'}))}
+    async me(){
+      if(w.kind==='shop')return {id:w.uid,name:'',employee_code:'shop',shared:true,is_manager:true,store_id:'main',shopName:w.name};
+      if(w.kind==='admin')return {id:w.uid,name:'Admin',employee_code:'admin',is_admin:true,is_manager:true,allStores:true};
+      return {id:w.uid,name:w.name,employee_code:w.code,is_manager:w.manager,is_admin:w.admin,store_id:w.stores[0]||null,extraStores:w.stores,allStores:!w.stores.length};
+    },
+    async stores(){return w.kind==='shop'?[{id:'main',name:w.name}]:await rw.businessStores()},
+    async catalog(){const r=await fetch('catalog/gadjet.json',{cache:'no-cache'});return r.ok?(await r.json()).filter(x=>x.active!==false):[]},
+    async items(store){return (await mine('go_items',store)).filter(x=>x.active!==false).sort((a,b)=>String(a.category).localeCompare(String(b.category))||String(a.name).localeCompare(String(b.name)))},
+    async openRequests(store){return (await mine('go_requests',store)).filter(x=>x.status==='open').sort((a,b)=>-byNew(a,b))},
+    async submissions(store){return (await mine('go_submissions',store)).filter(x=>x.status==='new'||x.status==='seen').sort(byNew)},
+    async addItem(row){const o=strip({...row,active:true,current_stock:row.current_stock??null,created_at:now()});return await sp.add('go_items',o)},
+    async updateItem(id,patch){await sp.patch('go_items',id,strip(patch))},
+    async submit(sub,lines){
+      const bt=sp.batch(),sref=sp.newRef('go_submissions'),t=now();
+      bt.set(sref,strip({...sub,created_at:t}));
+      lines.forEach(l=>bt.set(sp.newRef('go_requests'),strip({store_id:sub.store_id,item_id:l.item_id,qty:l.qty,status:'open',requested_by:sub.submitted_by,requested_by_name:sub.submitted_by_name,submission_id:sref.id,created_at:t})));
+      await bt.commit();return {id:sref.id,...sub,created_at:t}},
+    async markSeen(id){await sp.patch('go_submissions',id,{status:'seen'})},
+    async setStock(item,qty){await sp.patch('go_items',item,{current_stock:qty,stock_updated_at:now()})},
+    async createOrder(row,reqIds,subIds){
+      const bt=sp.batch(),oref=sp.newRef('go_orders'),o=strip({...row,created_at:now()});
+      bt.set(oref,o);reqIds.forEach(id=>bt.update(sp.ref('go_requests',id),{status:'ordered',order_id:oref.id}));
+      subIds.forEach(id=>bt.update(sp.ref('go_submissions',id),{status:'ordered'}));
+      await bt.commit();return {id:oref.id,...o}},
+    async orders(store){return (await mine('go_orders',store)).sort(byNew).slice(0,30)},
+    async getEmails(){const d=await sp.get('go_settings','email');return (d&&d.value)||{}},
+    async setEmails(v){await sp.set('go_settings','email',{value:v})}
   };
 }
 
 /* ---------------- state ---------------- */
-const S={api:null,me:null,stores:[],store:null,tab:'need',items:[],reqs:[],orders:[],emails:{},cat:'All',q:'',draft:null};
-const isMgr=()=>!!(S.me&&(S.me.is_admin||S.me.is_manager));
-const storeName=()=>(S.stores.find(s=>s.id===S.store)||{}).name||'Store 1';
-const openQty=id=>S.reqs.filter(r=>r.item_id===id).reduce((t,r)=>t+Number(r.qty),0);
+const S={api:null,me:null,stores:[],store:null,tab:'need',items:[],catalog:[],reqs:[],subs:[],orders:[],emails:{},cat:'All',q:'',draft:null,basket:{}};
+const isMgr=()=>!!(S.me&&(S.me.is_admin||(S.me.is_manager&&!S.me.is_shop)));
+const storeName=()=>{const i=S.stores.findIndex(s=>s.id===S.store);return i<0?'your shop':(S.stores[i].name||'Store '+(i+1))};
 const isLow=it=>it.min_qty!=null&&it.current_stock!=null&&Number(it.current_stock)<=Number(it.min_qty);
 
-/* What the manager should order: everything staff asked for, plus anything on auto-order that has run low. */
+/* One list of everything a person can ask for: this shop's items plus supplier catalogue lines the shop hasn't stocked yet. */
+function products(){
+  const have=new Set(S.items.filter(i=>i.code).map(i=>i.code));
+  const out=S.items.map(i=>({key:'i:'+i.id,item:i,code:i.code,name:i.name,size:i.size,category:i.category,price:i.price,photo:i.photo,note:i.note,supplier:i.supplier}));
+  for(const c of S.catalog)if(!have.has(c.code))out.push({key:'c:'+c.code,cat:c,code:c.code,name:c.name,size:c.size,category:c.category,price:c.price,photo:c.photo,note:c.note,supplier:c.supplier});
+  return out.sort((a,b)=>CATS.indexOf(a.category)-CATS.indexOf(b.category)||a.category.localeCompare(b.category)||String(a.code||'~').localeCompare(String(b.code||'~'))||a.name.localeCompare(b.name));
+}
+const askedFor=p=>p.item?S.reqs.filter(r=>r.item_id===p.item.id).reduce((t,r)=>t+Number(r.qty),0):0;
+
+/* basket: kept on this device per shop until submitted */
+const bKey=()=>'go_basket_'+S.store;
+function loadBasket(){try{S.basket=JSON.parse(localStorage.getItem(bKey())||'{}')}catch(e){S.basket={}}}
+function saveBasket(){try{localStorage.setItem(bKey(),JSON.stringify(S.basket))}catch(e){}renderBasketBar()}
+function basketCount(){return Object.values(S.basket).reduce((t,n)=>t+Number(n||0),0)}
+function renderBasketBar(){const n=basketCount(),lines=Object.values(S.basket).filter(x=>x>0).length;
+  $('#basketBar').classList.toggle('hidden',!n||S.tab!=='need');$('#basketCount').textContent='Your list: '+lines+(lines===1?' item':' items')+' ('+n+' in total)'}
+
+/* What the manager should order: everything staff submitted, plus anything on auto-order that has run low. */
 function buildOrderLines(){
   const lines=[];
   for(const it of S.items){
-    const asked=openQty(it.id);
+    const reqs=S.reqs.filter(r=>r.item_id===it.id), asked=reqs.reduce((t,r)=>t+Number(r.qty),0);
     let auto=0;
-    if(it.auto_order&&isLow(it)){
-      auto=it.order_qty!=null&&Number(it.order_qty)>0?Number(it.order_qty):Math.max(1,Number(it.min_qty)-Number(it.current_stock)+1);
-    }
+    if(it.auto_order&&isLow(it))auto=it.order_qty!=null&&Number(it.order_qty)>0?Number(it.order_qty):Math.max(1,Number(it.min_qty)-Number(it.current_stock)+1);
     const qty=Math.max(asked,auto);
-    if(qty>0)lines.push({item_id:it.id,category:it.category,name:it.name,size:it.size||'',qty,asked,auto,stock:it.current_stock,min:it.min_qty,
-      who:[...new Set(S.reqs.filter(r=>r.item_id===it.id).map(r=>r.requested_by_name).filter(Boolean))]});
+    if(qty>0)lines.push({item_id:it.id,category:it.category,code:it.code||'',name:it.name,size:it.size||'',price:it.price,photo:it.photo,qty,asked,auto,stock:it.current_stock,min:it.min_qty,
+      who:[...new Set(reqs.map(r=>r.requested_by_name).filter(Boolean))]});
   }
   return lines;
 }
 
 async function load(){
-  [S.items,S.reqs]=await Promise.all([S.api.items(S.store),S.api.openRequests(S.store)]);
-  S.draft=null;
+  const jobs=[S.api.items(S.store),S.api.openRequests(S.store),S.api.catalog().catch(()=>[])];
+  if(isMgr())jobs.push(S.api.submissions(S.store));
+  const r=await Promise.all(jobs);[S.items,S.reqs,S.catalog]=r;S.subs=r[3]||[];
+  S.draft=null;loadBasket();
 }
 async function reload(){try{await load()}catch(e){flash('Could not load: '+e.message)}render()}
 
 /* ---------------- render ---------------- */
 function render(){
   const tabs=[['need','What we need'],['stock','Stock count']];
-  if(isMgr())tabs.push(['order','Order'],['items','Items & levels'],['history','Past orders']);
+  const newSubs=S.subs.filter(s=>s.status==='new').length;
+  if(isMgr())tabs.unshift(['subs','Submitted']),tabs.push(['order','Order'],['items','Items & levels'],['history','Past orders']);
+  if(!tabs.some(t=>t[0]===S.tab))S.tab=tabs[0][0];
   const n=buildOrderLines().length;
-  $('#tabs').replaceChildren(...tabs.map(([k,t])=>h('button',{class:S.tab===k?'on':'',onclick:()=>{S.tab=k;if(k==='history')loadHistory();else render()}},t,k==='order'&&n?h('span',{class:'cnt'},n):null)));
-  const m=$('#main');
-  m.replaceChildren(({need:viewNeed,stock:viewStock,order:viewOrder,items:viewItems,history:viewHistory}[S.tab]||viewNeed)());
+  $('#tabs').replaceChildren(...tabs.map(([k,t])=>h('button',{class:S.tab===k?'on':'','data-tab':k,onclick:()=>{S.tab=k;if(k==='history')loadHistory();else render()}},t,
+    k==='order'&&n?h('span',{class:'cnt'},n):null,k==='subs'&&newSubs?h('span',{class:'cnt'},newSubs):null)));
+  $('#main').replaceChildren(({subs:viewSubs,need:viewNeed,stock:viewStock,order:viewOrder,items:viewItems,history:viewHistory}[S.tab]||viewNeed)());
+  renderBasketBar();
 }
-function catChips(){
-  const used=['All',...CATS.filter(c=>S.items.some(i=>i.category===c)),...[...new Set(S.items.map(i=>i.category))].filter(c=>!CATS.includes(c))];
+function catChips(list){
+  const used=['All',...CATS.filter(c=>list.some(i=>i.category===c)),...[...new Set(list.map(i=>i.category))].filter(c=>!CATS.includes(c))];
   return h('div',{class:'chips'},used.map(c=>h('button',{class:'chip'+(S.cat===c?' on':''),onclick:()=>{S.cat=c;render()}},c)));
 }
-function shown(){const q=S.q.trim().toLowerCase();return S.items.filter(i=>(S.cat==='All'||i.category===S.cat)&&(!q||label(i).toLowerCase().includes(q)))}
-function byCat(list,rowFn){
-  const out=[];let cur=null;
-  for(const it of list){if(it.category!==cur){cur=it.category;out.push(h('div',{class:'cat'},cur))}out.push(rowFn(it))}
-  return out;
+function filtered(list){const q=S.q.trim().toLowerCase();return list.filter(i=>(S.cat==='All'||i.category===S.cat)&&(!q||((i.code||'')+' '+label(i)+' '+(i.supplier||'')).toLowerCase().includes(q)))}
+function byCat(list,rowFn){const out=[];let cur=null;for(const it of list){if(it.category!==cur){cur=it.category;out.push(h('div',{class:'cat'},cur))}out.push(rowFn(it))}return out}
+function searchBox(ph){return h('input',{type:'search',placeholder:ph||'Search by name or code…',value:S.q,style:{marginBottom:'10px'},oninput:e=>{S.q=e.target.value;const p=e.target.selectionStart;render();const i=document.querySelector('input[type=search]');if(i){i.focus();i.setSelectionRange(p,p)}}})}
+function pic(p){
+  return p.photo?h('img',{class:'pic',src:p.photo,alt:p.name,loading:'lazy',onclick:()=>showPhoto(p)}):h('div',{class:'pic none'},'no photo');
 }
-function searchBox(){return h('input',{type:'search',placeholder:'Search items…',value:S.q,style:{marginBottom:'10px'},oninput:e=>{S.q=e.target.value;const p=e.target.selectionStart;render();const i=document.querySelector('input[type=search]');if(i){i.focus();i.setSelectionRange(p,p)}}})}
+function showPhoto(p){
+  const m=h('div',{class:'modal',onclick:e=>{if(e.target===m)m.remove()}},h('div',{class:'sheet',style:{textAlign:'center'}},
+    h('img',{class:'big',src:p.photo,alt:p.name}),h('p',null,p.code?h('span',{class:'code'},p.code):null,h('b',null,label(p))),
+    p.note?h('span',{class:'chk'},'Check: '+p.note):null,
+    h('p',{class:'note',style:{marginTop:'8px'}},'Photo taken from the shelf. Compare it with the product and the shelf label before you add it.'),
+    h('button',{class:'btn alt',onclick:()=>m.remove()},'Close')));
+  document.body.append(m);
+}
 
 function viewNeed(){
-  const list=shown();
+  const all=products(), list=filtered(all);
   return h('div',null,
     h('div',{class:'card'},
       h('h2',null,'What does '+storeName()+' need?'),
-      h('p',{class:'note'},'Tap + for each one that needs ordering. Everyone’s taps are added together for the manager.'),
-      searchBox(),catChips(),
-      list.length?byCat(list,it=>{
-        const total=openQty(it.id), mine=S.reqs.filter(r=>r.item_id===it.id&&r.requested_by===S.me.id);
-        return h('div',{class:'row'},
-          h('div',{class:'nm'},h('b',null,label(it)),h('small',null,total?('Asked for: '+fmt(total)):'Not asked for yet',isLow(it)?' · stock low':'')),
+      h('p',{class:'note'},'Walk the shelves, compare with the photo and code, and tap + for each one that needs ordering. When you’re done, press Review & submit at the bottom. Your manager sees the list straight away.'),
+      searchBox(),catChips(all),
+      list.length?byCat(list,p=>{
+        const q=Number(S.basket[p.key]||0), asked=askedFor(p);
+        return h('div',{class:'row','data-key':p.key},
+          pic(p),
+          h('div',{class:'nm'},h('b',null,p.code?h('span',{class:'code'},p.code):null,label(p)),
+            h('small',null,[p.price!=null?money(p.price):null,p.supplier,asked?('already asked for: '+fmt(asked)):null].filter(Boolean).join(' · ')),
+            p.note?h('span',{class:'chk'},'Check: '+p.note):null),
           h('div',{class:'qty'},
-            h('button',{title:'Take one off','aria-label':'Take one off '+label(it),disabled:!mine.length,onclick:()=>takeOff(it,mine)},'−'),
-            h('span',{class:'n'},fmt(total)),
-            h('button',{title:'Need one more','aria-label':'Need one more '+label(it),onclick:()=>need(it)},'+')));
-      }):h('div',{class:'empty'},S.items.length?'Nothing matches.':'No items yet. Add the first one below.')),
-    h('div',{class:'card'},h('h2',null,'Add a new item'),h('p',{class:'note'},'Can’t find it above? Add it once and everyone can pick it from then on.'),addItemForm()));
+            h('button',{title:'One less','aria-label':'One less '+label(p),disabled:!q,onclick:()=>{const v=q-1;if(v>0)S.basket[p.key]=v;else delete S.basket[p.key];saveBasket();render()}},'−'),
+            h('span',{class:'n'},fmt(q)),
+            h('button',{class:'plus',title:'One more','aria-label':'One more '+label(p),onclick:()=>{S.basket[p.key]=q+1;saveBasket();render()}},'+')));
+      }):h('div',{class:'empty'},all.length?'Nothing matches.':'No products yet. Add the first one below.')),
+    h('div',{class:'card'},h('h2',null,'Add a product that isn’t listed'),h('p',{class:'note'},'Add it once and everyone at this shop can pick it from then on.'),addItemForm()));
 }
 function addItemForm(){
   const cat=h('select',{class:'f',id:'niCat'},CATS.map(c=>h('option',{value:c},c)));
@@ -189,109 +252,168 @@ function addItemForm(){
   return h('div',null,h('div',{class:'grid3'},nm,sz,cat),
     h('div',{class:'bar'},h('button',{class:'btn',id:'niAdd',onclick:async()=>{
       const name=nm.value.trim(),size=sz.value.trim();if(!name){nm.focus();return}
-      if(S.items.some(i=>label(i).toLowerCase()===(name+(size?' '+size:'')).toLowerCase())){flash('That item is already in the list');return}
+      if(products().some(i=>label(i).toLowerCase()===(name+(size?' '+size:'')).toLowerCase())){flash('That product is already in the list');return}
       try{const it=await S.api.addItem({store_id:S.store,category:cat.value,name,size:size||null,created_by:S.me.id});
-        await S.api.addRequest({store_id:S.store,item_id:it.id,qty:1,requested_by:S.me.id,requested_by_name:S.me.name||S.me.employee_code});
-        flash('Added '+name+' and asked for 1');await reload()}catch(e){flash('Not added: '+e.message)}
-    }},'Add item and ask for 1')));
+        S.items.push(it);S.basket['i:'+it.id]=1;saveBasket();flash('Added '+name+' to your list');render()}catch(e){flash('Not added: '+e.message)}
+    }},'Add to the list')));
 }
-async function need(it){try{const r=await S.api.addRequest({store_id:S.store,item_id:it.id,qty:1,requested_by:S.me.id,requested_by_name:S.me.name||S.me.employee_code});S.reqs.push(r);render()}catch(e){flash('Not saved: '+e.message)}}
-async function takeOff(it,mine){const r=mine[mine.length-1];if(!r)return;try{await S.api.cancelRequest(r.id);S.reqs=S.reqs.filter(x=>x.id!==r.id);render()}catch(e){flash('Not saved: '+e.message)}}
+
+/* review + submit */
+function openSubmit(){
+  const all=products(), lines=Object.entries(S.basket).filter(([,q])=>q>0).map(([k,q])=>({p:all.find(x=>x.key===k),q:Number(q),k})).filter(l=>l.p);
+  if(!lines.length){flash('Your list is empty');return}
+  const shared=!!(S.me.is_shop||S.me.shared);
+  let savedName='';try{savedName=localStorage.getItem('go_name')||''}catch(e){}
+  const nameIn=h('input',{type:'text',id:'subName',placeholder:'Your name',value:shared?savedName:(S.me.name||S.me.employee_code)});
+  const noteIn=h('textarea',{id:'subNote',rows:'2',placeholder:'Anything the manager should know (optional)'});
+  const m=h('div',{class:'modal'},h('div',{class:'sheet'},
+    h('h3',null,'Check your list'),
+    h('div',null,lines.map(l=>h('div',{class:'row'},pic(l.p),
+      h('div',{class:'nm'},h('b',null,l.p.code?h('span',{class:'code'},l.p.code):null,label(l.p)),h('small',null,l.p.price!=null?money(l.p.price)+' each':'')),
+      h('input',{type:'number',class:'num',min:'0',step:'1',value:l.q,'aria-label':'How many '+label(l.p),onchange:e=>{l.q=Math.max(0,Math.round(Number(e.target.value)||0))}})))),
+    h('label',{class:'l',for:'subName'},shared?'Your name (so the manager knows who sent it)':'Sent by'),nameIn,
+    h('label',{class:'l',for:'subNote'},'Note'),noteIn,
+    h('div',{class:'bar'},
+      h('button',{class:'btn good',id:'subSend',onclick:async e=>{
+        const who=nameIn.value.trim();if(!who){nameIn.focus();nameIn.style.borderColor='var(--bad)';return}
+        const keep=lines.filter(l=>l.q>0);if(!keep.length){flash('Nothing to send');return}
+        e.target.disabled=true;
+        try{
+          // shop products not stocked here yet are added from the supplier catalogue first
+          for(const l of keep)if(l.p.cat){const c=l.p.cat;const it=await S.api.addItem({store_id:S.store,code:c.code,supplier:c.supplier,category:c.category,name:c.name,size:c.size||null,price:c.price,photo:c.photo,note:c.note,created_by:S.me.id});S.items.push(it);l.item_id=it.id}else l.item_id=l.p.item.id;
+          await S.api.submit({store_id:S.store,submitted_by:S.me.id,submitted_by_name:who,note:noteIn.value.trim()||null,item_count:keep.length,status:'new'},keep.map(l=>({item_id:l.item_id,qty:l.q})));
+          if(shared)try{localStorage.setItem('go_name',who)}catch(er){}
+          S.basket={};saveBasket();m.remove();flash('Sent to your manager. Thank you!');await reload();
+        }catch(er){e.target.disabled=false;flash('Not sent: '+er.message)}
+      }},'Submit to manager'),
+      h('button',{class:'btn alt',onclick:()=>m.remove()},'Keep adding'))));
+  document.body.append(m);
+}
+$('#basketGo').onclick=openSubmit;
 
 function viewStock(){
-  const list=shown();
+  const list=filtered(S.items);
   return h('div',{class:'card'},
     h('h2',null,'Stock count — '+storeName()),
     h('p',{class:'note'},'Type how many are on the shelf and in the back. If an item drops to its minimum and is on auto-order, it goes onto the manager’s order by itself.'),
-    searchBox(),catChips(),
-    list.length?byCat(list,it=>h('div',{class:'row'},
-      h('div',{class:'nm'},h('b',null,label(it)),h('small',null,it.stock_updated_at?('Counted '+when(it.stock_updated_at)):'Not counted yet',it.min_qty!=null?' · minimum '+fmt(it.min_qty):'')),
+    searchBox(),catChips(S.items),
+    list.length?byCat(list,it=>h('div',{class:'row'},pic(it),
+      h('div',{class:'nm'},h('b',null,it.code?h('span',{class:'code'},it.code):null,label(it)),h('small',null,it.stock_updated_at?('Counted '+when(it.stock_updated_at)):'Not counted yet',it.min_qty!=null?' · minimum '+fmt(it.min_qty):'')),
       isLow(it)?h('span',{class:'tag low'},'Low'):(it.current_stock!=null&&it.min_qty!=null?h('span',{class:'tag ok'},'OK'):null),
       h('input',{type:'number',class:'num',min:'0',step:'1',inputmode:'numeric','aria-label':'Stock of '+label(it),value:it.current_stock==null?'':it.current_stock,
         onchange:async e=>{const v=e.target.value.trim();if(v===''||Number(v)<0)return;try{await S.api.setStock(it.id,Number(v));it.current_stock=Number(v);it.stock_updated_at=new Date().toISOString();flash('Saved');render()}catch(er){flash('Not saved: '+er.message)}}})
-    )):h('div',{class:'empty'},'No items yet.'));
+    )):h('div',{class:'empty'},'Products appear here once they’ve been ordered or added.'));
+}
+
+/* ---- manager: submitted lists ---- */
+function viewSubs(){
+  if(!S.subs.length)return h('div',{class:'card'},h('h2',null,'Submitted lists — '+storeName()),h('div',{class:'empty'},'No lists waiting. When staff submit what they need, it shows up here.'));
+  return h('div',null,
+    h('div',{class:'card'},h('h2',null,'Submitted lists — '+storeName()),h('p',{class:'note'},'Each list a member of staff sent. The Order tab adds them all up into one order.'),
+      h('div',{class:'bar',style:{marginTop:'0'}},h('button',{class:'btn',onclick:()=>{S.tab='order';render()}},'Go to the combined order'),
+        h('button',{class:'btn alt',onclick:()=>printOrder(buildOrderLines(),'Order — '+storeName())},'Print combined order'))),
+    S.subs.map(s=>{
+      const lines=S.reqs.filter(r=>r.submission_id===s.id).map(r=>({r,it:S.items.find(i=>i.id===r.item_id)})).filter(x=>x.it);
+      return h('div',{class:'card sub','data-sub':s.id},
+        h('div',{class:'hd'},h('b',null,s.submitted_by_name),h('span',{class:'note',style:{margin:0}},when(s.created_at)),h('span',{class:'tag '+(s.status==='new'?'new':'seen')},s.status==='new'?'New':'Seen'),
+          h('span',{style:{flex:1}}),
+          h('button',{class:'btn alt sm',onclick:()=>printOrder(lines.map(x=>({category:x.it.category,code:x.it.code||'',name:x.it.name,size:x.it.size||'',price:x.it.price,photo:x.it.photo,qty:Number(x.r.qty)})),'List from '+s.submitted_by_name+' — '+storeName()+' — '+when(s.created_at))},'Print'),
+          s.status==='new'?h('button',{class:'btn alt sm',onclick:async()=>{try{await S.api.markSeen(s.id);s.status='seen';render()}catch(e){flash('Not saved: '+e.message)}}},'Mark seen'):null),
+        s.note?h('p',{class:'note',style:{margin:'6px 0 0'}},'“'+s.note+'”'):null,
+        h('ul',null,lines.map(x=>h('li',null,h('b',null,fmt(x.r.qty)+' × '),x.it.code?h('span',{class:'code'},x.it.code):null,label(x.it)))),
+        !lines.length?h('p',{class:'note'},'Already ordered.'):null);
+    }));
 }
 
 function viewOrder(){
   if(!S.draft)S.draft=buildOrderLines();
-  const lines=S.draft;
-  const email=S.emails[S.store]||'';
-  const tbl=lines.length?h('table',null,
-    h('thead',null,h('tr',null,h('th',null,'Item'),h('th',null,'Why'),h('th',{class:'r'},'Order'),h('th',null,''))),
-    h('tbody',null,byCatRows(lines))):h('div',{class:'empty'},'Nothing to order. It fills up as staff ask for things or stock runs low.');
+  const lines=S.draft, email=S.emails[S.store]||'';
+  const total=lines.reduce((t,l)=>t+(l.price!=null?Number(l.price)*l.qty:0),0);
+  const tbl=lines.length?h('div',{style:{overflowX:'auto'}},h('table',null,
+    h('thead',null,h('tr',null,h('th',null,''),h('th',null,'Item'),h('th',null,'Why'),h('th',{class:'r'},'Price'),h('th',{class:'r'},'Order'),h('th',null,''))),
+    h('tbody',null,byCatRows(lines)))):h('div',{class:'empty'},'Nothing to order. It fills up as staff submit lists or stock runs low.');
   return h('div',null,
-    h('div',{class:'card'},h('h2',null,'Order for '+storeName()),h('p',{class:'note'},'Everything staff asked for, plus auto-order items that have run low. Change any amount before you print or send.'),tbl,
+    h('div',{class:'card'},h('h2',null,'Order for '+storeName()),h('p',{class:'note'},'Everything staff submitted, added up, plus auto-order items that have run low. Change any amount before you print or send.'),tbl,
+      lines.length&&total?h('p',{style:{textAlign:'right',fontWeight:'700',margin:'8px 6px 0'}},'Estimated total '+money(total)):null,
       lines.length?h('div',{class:'bar'},
         h('button',{class:'btn alt',id:'btnPrint',onclick:()=>printOrder(lines,'Order — '+storeName())},'Print'),
         h('button',{class:'btn alt',id:'btnEmail',onclick:()=>emailOrder(lines)},'Email'),
         h('button',{class:'btn good',id:'btnDone',onclick:()=>markOrdered(lines)},'Mark as ordered')):null),
-    h('div',{class:'card'},h('h2',null,'Send orders to'),h('p',{class:'note'},'The email address the Email button uses for this store.'),
+    h('div',{class:'card'},h('h2',null,'Send orders to'),h('p',{class:'note'},'The email address the Email button uses for this shop.'),
       h('div',{style:{display:'flex',gap:'8px',flexWrap:'wrap'}},h('input',{type:'email',id:'ordEmail',placeholder:'orders@example.com',value:email,style:{flex:'1',minWidth:'200px'}}),
         h('button',{class:'btn alt',onclick:async()=>{const v=$('#ordEmail').value.trim();S.emails[S.store]=v;try{await S.api.setEmails(S.emails);flash('Saved')}catch(e){flash('Not saved: '+e.message)}}},'Save'))));
 }
+function sortLines(lines){return [...lines].sort((a,b)=>CATS.indexOf(a.category)-CATS.indexOf(b.category)||a.category.localeCompare(b.category)||String(a.code||'~').localeCompare(String(b.code||'~'))||a.name.localeCompare(b.name))}
 function byCatRows(lines){
   const out=[];let cur=null;
-  for(const l of [...lines].sort((a,b)=>a.category.localeCompare(b.category)||a.name.localeCompare(b.name))){
-    if(l.category!==cur){cur=l.category;out.push(h('tr',null,h('td',{colspan:'4',class:'cat'},cur)))}
+  for(const l of sortLines(lines)){
+    if(l.category!==cur){cur=l.category;out.push(h('tr',null,h('td',{colspan:'6',class:'cat'},cur)))}
     const why=[];if(l.asked)why.push('asked ×'+fmt(l.asked)+(l.who.length?' ('+l.who.join(', ')+')':''));if(l.auto)why.push('low: '+fmt(l.stock)+' left, min '+fmt(l.min));
-    out.push(h('tr',null,h('td',null,h('b',null,l.name+(l.size?' '+l.size:''))),h('td',null,h('small',{style:{color:'var(--muted)'}},why.join(' · '))),
-      h('td',{class:'r'},h('input',{type:'number',class:'num',min:'0',step:'1','aria-label':'Order amount for '+l.name,value:l.qty,onchange:e=>{l.qty=Math.max(0,Number(e.target.value)||0)}})),
+    out.push(h('tr',null,h('td',null,pic(l)),h('td',null,h('b',null,l.code?h('span',{class:'code'},l.code):null,l.name+(l.size?' '+l.size:''))),h('td',null,h('small',{style:{color:'var(--muted)'}},why.join(' · '))),
+      h('td',{class:'r'},money(l.price)),
+      h('td',{class:'r'},h('input',{type:'number',class:'num',min:'0',step:'1','aria-label':'Order amount for '+l.name,value:l.qty,onchange:e=>{l.qty=Math.max(0,Number(e.target.value)||0);render()}})),
       h('td',null,h('button',{class:'btn alt sm',title:'Leave this off the order',onclick:()=>{S.draft=S.draft.filter(x=>x!==l);render()}},'✕'))));
   }
   return out;
 }
 function orderText(lines,title){
-  const L=[title,new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),''];let cur=null;
-  for(const l of [...lines].filter(x=>x.qty>0).sort((a,b)=>a.category.localeCompare(b.category)||a.name.localeCompare(b.name))){
+  const L=[title,new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),''];let cur=null,tot=0;
+  for(const l of sortLines(lines.filter(x=>x.qty>0))){
     if(l.category!==cur){cur=l.category;L.push('',cur.toUpperCase())}
-    L.push('  '+fmt(l.qty)+' x '+l.name+(l.size?' '+l.size:''));
+    L.push('  '+fmt(l.qty)+' x '+(l.code?l.code+'  ':'')+l.name+(l.size?' '+l.size:'')+(l.price!=null?'  @ '+money(l.price):''));
+    if(l.price!=null)tot+=Number(l.price)*l.qty;
   }
+  if(tot)L.push('','Estimated total: '+money(tot));
   return L.join('\n');
 }
 function printOrder(lines,title){
-  const p=$('#printArea');let cur=null;const rows=[];
-  for(const l of [...lines].filter(x=>x.qty>0).sort((a,b)=>a.category.localeCompare(b.category)||a.name.localeCompare(b.name))){
-    if(l.category!==cur){cur=l.category;rows.push(h('tr',null,h('td',{colspan:'3',class:'cat'},h('b',null,cur))))}
-    rows.push(h('tr',null,h('td',{style:{width:'18mm',textAlign:'right',fontWeight:'700'}},fmt(l.qty)),h('td',null,l.name+(l.size?' '+l.size:'')),h('td',{style:{width:'30mm'}},'')));
+  const p=$('#printArea');let cur=null,tot=0;const rows=[];
+  for(const l of sortLines(lines.filter(x=>x.qty>0))){
+    if(l.category!==cur){cur=l.category;rows.push(h('tr',null,h('td',{colspan:'6',class:'cat'},h('b',null,cur))))}
+    const lt=l.price!=null?Number(l.price)*l.qty:null;if(lt)tot+=lt;
+    rows.push(h('tr',null,h('td',{style:{width:'14mm',textAlign:'right',fontWeight:'700'}},fmt(l.qty)),h('td',{style:{width:'16mm',fontWeight:'700'}},l.code||''),
+      h('td',{style:{width:'24mm'}},l.photo?h('img',{src:l.photo,alt:''}):''),h('td',null,l.name+(l.size?' '+l.size:'')),
+      h('td',{style:{textAlign:'right',width:'18mm'}},money(l.price)),h('td',{style:{width:'20mm'}},'')));
   }
-  p.replaceChildren(h('h1',null,title),h('div',null,new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · prepared by '+(S.me.name||S.me.employee_code)),
-    h('table',null,h('thead',null,h('tr',null,h('th',{style:{textAlign:'right'}},'Qty'),h('th',null,'Item'),h('th',null,'Received'))),h('tbody',null,rows)));
-  window.print();
+  p.replaceChildren(h('h1',null,title),h('div',null,new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · printed by '+(S.me.name||S.me.employee_code)),
+    h('table',null,h('thead',null,h('tr',null,h('th',{style:{textAlign:'right'}},'Qty'),h('th',null,'Code'),h('th',null,'Photo'),h('th',null,'Item'),h('th',{style:{textAlign:'right'}},'Price'),h('th',null,'Received'))),h('tbody',null,rows)),
+    tot?h('p',{style:{textAlign:'right',fontWeight:'700'}},'Estimated total '+money(tot)):'');
+  const imgs=[...p.querySelectorAll('img')];
+  Promise.all(imgs.map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r;setTimeout(r,1500)}))).then(()=>window.print());
 }
 function emailOrder(lines){
   const to=($('#ordEmail')&&$('#ordEmail').value.trim())||S.emails[S.store]||'';
   const subject='Order — '+storeName()+' — '+new Date().toLocaleDateString('en-GB');
   const url='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(orderText(lines,'Order for '+storeName()));
-  S.lastMailto=url;
-  const a=h('a',{href:url,target:'_top'});document.body.append(a);a.click();a.remove();
+  S.lastMailto=url;const a=h('a',{href:url,target:'_top'});document.body.append(a);a.click();a.remove();
   flash(to?'Opening your email app…':'Opening your email app — add the address there, or save one below');
 }
 async function markOrdered(lines){
   const keep=lines.filter(l=>l.qty>0);if(!keep.length){flash('Nothing to order');return}
-  const ids=S.reqs.filter(r=>lines.some(l=>l.item_id===r.item_id)).map(r=>r.id);
-  try{await S.api.createOrder({store_id:S.store,lines:keep.map(l=>({item_id:l.item_id,category:l.category,name:l.name,size:l.size,qty:l.qty})),created_by:S.me.id,created_by_name:S.me.name||S.me.employee_code},ids);
-    flash('Order saved. The asked-for list is cleared.');await reload()}catch(e){flash('Not saved: '+e.message)}
+  const reqs=S.reqs.filter(r=>lines.some(l=>l.item_id===r.item_id)), subIds=[...new Set(reqs.map(r=>r.submission_id).filter(Boolean))];
+  try{await S.api.createOrder({store_id:S.store,lines:keep.map(l=>({item_id:l.item_id,category:l.category,code:l.code,name:l.name,size:l.size,price:l.price,photo:l.photo,qty:l.qty})),created_by:S.me.id,created_by_name:S.me.name||S.me.employee_code},reqs.map(r=>r.id),subIds);
+    flash('Order saved. The submitted lists are cleared.');await reload()}catch(e){flash('Not saved: '+e.message)}
 }
 
 function viewItems(){
-  const list=shown();
+  const list=filtered(S.items);
   return h('div',{class:'card'},
     h('h2',null,'Items & levels — '+storeName()),
     h('p',{class:'note'},'Minimum = the stock level where it needs ordering. Order amount = how many to order then. Switch Auto on and it puts itself on your order when a stock count hits the minimum.'),
-    searchBox(),catChips(),
+    searchBox(),catChips(S.items),
     list.length?h('div',{style:{overflowX:'auto'}},h('table',null,
       h('thead',null,h('tr',null,h('th',null,'Item'),h('th',null,'Category'),h('th',{class:'r'},'Stock'),h('th',{class:'r'},'Minimum'),h('th',{class:'r'},'Order amount'),h('th',null,'Auto'),h('th',null,''))),
       h('tbody',null,list.map(it=>{
         const save=(field,conv)=>async e=>{let v=e.target.type==='checkbox'?e.target.checked:e.target.value.trim();if(conv)v=v===''?null:Number(v);try{await S.api.updateItem(it.id,{[field]:v});it[field]=v;flash('Saved');render()}catch(er){flash('Not saved: '+er.message)}};
         return h('tr',null,
-          h('td',null,h('b',null,label(it)),isLow(it)?h('span',{class:'tag low',style:{marginLeft:'6px'}},'Low'):null),
+          h('td',null,h('b',null,it.code?h('span',{class:'code'},it.code):null,label(it)),isLow(it)?h('span',{class:'tag low',style:{marginLeft:'6px'}},'Low'):null),
           h('td',null,h('select',{class:'f',style:{padding:'7px',minWidth:'120px'},'aria-label':'Category of '+label(it),onchange:save('category')},[...new Set([...CATS,it.category])].map(c=>h('option',{value:c,selected:c===it.category},c)))),
           h('td',{class:'r'},it.current_stock==null?'—':fmt(it.current_stock)),
           h('td',{class:'r'},h('input',{type:'number',class:'num',min:'0','aria-label':'Minimum for '+label(it),value:it.min_qty==null?'':it.min_qty,onchange:save('min_qty',true)})),
           h('td',{class:'r'},h('input',{type:'number',class:'num',min:'0','aria-label':'Order amount for '+label(it),value:it.order_qty==null?'':it.order_qty,onchange:save('order_qty',true)})),
           h('td',null,h('input',{type:'checkbox','aria-label':'Auto-order '+label(it),checked:it.auto_order,style:{width:'20px',height:'20px'},onchange:save('auto_order')})),
           h('td',null,h('button',{class:'btn alt sm',title:'Remove from the list',onclick:async()=>{if(!confirm('Remove '+label(it)+' from the list?'))return;try{await S.api.updateItem(it.id,{active:false});flash('Removed');await reload()}catch(er){flash('Not removed: '+er.message)}}},'Remove')));
-      })))):h('div',{class:'empty'},'No items yet. Staff add them under “What we need”.'));
+      })))):h('div',{class:'empty'},'Products appear here once staff add or order them.'));
 }
 
 async function loadHistory(){try{S.orders=await S.api.orders(S.store)}catch(e){flash('Could not load: '+e.message)}render()}
@@ -306,19 +428,19 @@ function viewHistory(){
 (async function(){
   try{const t=localStorage.getItem('rw_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}
   try{
-    S.api=window.GO_API||makeApi();
+    S.api=window.GO_API||await makeApi();
     S.me=await S.api.me();
-    if(!S.me){$('#tabs').replaceChildren();$('#main').replaceChildren(h('div',{class:'card'},h('h2',null,'Please sign in'),h('p',{class:'note'},'Goods Orders opens from Rotawise. Sign in there first.'),h('a',{class:'btn',href:'../hub/',target:'_top',style:{display:'inline-block',textDecoration:'none'}},'Go to Rotawise')));return}
+    if(!S.me){$('#tabs').replaceChildren();$('#main').replaceChildren(h('div',{class:'card'},h('h2',null,'Choose your shop first'),h('p',{class:'note'},'Goods Orders opens from Rotawise.'),h('a',{class:'btn',href:'../hub/',target:'_top',style:{display:'inline-block',textDecoration:'none'}},'Go to Rotawise')));return}
     S.stores=await S.api.stores();
-    let mine=S.stores;
-    if(!isMgr()&&S.me.store_id)mine=S.stores.filter(s=>s.id===S.me.store_id);
-    if(!mine.length){$('#main').replaceChildren(h('div',{class:'empty'},'No store is set up yet. Ask your admin to add one in Rota.'));return}
+    const me=S.me, mine=new Set([me.store_id,...(me.extraStores||[]),...(me.managed||[])].filter(Boolean));
+    let list=me.is_admin||me.allStores||me.shared?S.stores:S.stores.filter(s=>mine.has(s.id));
+    if(!list.length){$('#main').replaceChildren(h('div',{class:'empty'},'No shop is linked to this login yet. Ask your admin.'));return}
     let saved=null;try{saved=localStorage.getItem('go_store')}catch(e){}
-    S.store=(mine.find(s=>s.id===saved)||mine.find(s=>s.id===S.me.store_id)||mine[0]).id;
-    const sel=$('#storeSel');sel.replaceChildren(...mine.map((s,i)=>h('option',{value:s.id,selected:s.id===S.store},s.name||('Store '+(i+1)))));
-    sel.classList.toggle('hidden',mine.length<2);
+    S.store=(list.find(s=>s.id===saved)||list.find(s=>s.id===me.store_id)||list[0]).id;
+    const sel=$('#storeSel');sel.replaceChildren(...list.map((s,i)=>h('option',{value:s.id,selected:s.id===S.store},s.name||('Store '+(i+1)))));
+    sel.classList.toggle('hidden',list.length<2);
     sel.onchange=async()=>{S.store=sel.value;try{localStorage.setItem('go_store',S.store)}catch(e){}await reload()};
-    if(isMgr())try{S.emails=await S.api.getEmails()}catch(e){}
+    if(isMgr()){S.tab='subs';try{S.emails=await S.api.getEmails()}catch(e){}}
     await reload();
   }catch(e){$('#main').replaceChildren(h('div',{class:'empty'},'Could not load Goods Orders: '+e.message))}
 })();

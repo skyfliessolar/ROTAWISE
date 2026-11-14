@@ -373,11 +373,11 @@ const products=()=>(S.settings&&S.settings.products&&S.settings.products.length?
 const pById=id=>products().find(p=>p.id===id);
 const pName=p=>p?`${p.label} ${p.group}`:'Unknown item';
 /* ---------- stores ---------- */
-const DEFAULT_STORES=[{id:'main',name:'Main store',active:true}];
-const allStores=()=>(S.settings&&S.settings.stores&&S.settings.stores.length?S.settings.stores:DEFAULT_STORES);
+const DEFAULT_STORES=[{id:'main',name:'Store 1',active:true}];
+const allStores=()=>(S.settings&&S.settings.stores&&S.settings.stores.length?S.settings.stores:[{...DEFAULT_STORES[0],name:(S.me&&S.me.shopName)||DEFAULT_STORES[0].name}]);
 const sid=x=>(x&&x.storeId)||'main';
 const storeById=id=>allStores().find(s=>s.id===id);
-const storeName=id=>storeById(id)?.name||(id==='main'?'Main store':'Other store');
+const storeName=id=>storeById(id)?.name||(id==='main'?'Store 1':'Other store');
 const autoPrefix=n=>String(n||'').replace(/[^A-Za-z0-9]/g,'').slice(0,3).toUpperCase()||'ST';
 const storePrefix=id=>{const s=storeById(id);return (s&&s.prefix)||(id==='main'?'GAS':autoPrefix(s?.name))};
 const limited=()=>!isManager()&&!!(S.me&&S.me.stores&&S.me.stores.length);
@@ -432,9 +432,11 @@ async function makeCloud(cfg){
   let db;
   try{db=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})})}
   catch(e){db=F.getFirestore(app)}
-  const auth=Au.getAuth(app);const P=COLLECTION_PREFIX;
+  const auth=Au.getAuth(app);let P=COLLECTION_PREFIX;
   const docs=s=>s.docs.map(d=>({...d.data(),id:d.id}));
   return{mode:'cloud',
+    setPrefix:p=>{P=p},
+    rawOne:async(c,id)=>{const s=await F.getDoc(F.doc(db,c,id));return s.exists()?{...s.data(),id:s.id}:null},
     onAuth:cb=>Au.onAuthStateChanged(auth,cb),
     signIn:(e,p)=>Au.signInWithEmailAndPassword(auth,e,p),
     signOut:()=>Au.signOut(auth),
@@ -691,7 +693,19 @@ function syncTeam(){
     S.team.filter(t=>!want[t.id]).forEach(t=>write(()=>store.del('team',t.id)));
   },400);
 }
+/* A free shop made in Rotawise signs in as shop-<id>@shops.rotawise.app: Gas then keeps that shop's data
+   apart under hub_shops/<id>/gas_..., and whoever has the shop open runs it. */
+const SHOP_RE=/^shop-([a-z0-9]+)@shops\.rotawise\.app$/;
+const shopMode=()=>!!(S.me&&S.me.shop);
 async function identify(u){
+  store.setPrefix&&store.setPrefix(COLLECTION_PREFIX);
+  const sm=SHOP_RE.exec(String(u.email||'').toLowerCase());
+  if(sm){
+    const sh=await store.rawOne('hub_shops',sm[1]);
+    if(!sh)throw new Error('This shop no longer exists. Pick another in Rotawise.');
+    store.setPrefix(`hub_shops/${sm[1]}/gas_`);
+    return{uid:u.uid,code:'shop',name:sh.name,role:'admin',stores:[],shop:sm[1],shopName:sh.name};
+  }
   if(u.uid===OWNER_UID){
     try{if(!(await store.getOne('staff',u.uid)))await store.put('staff',u.uid,{code:'admin',name:'Admin',role:'admin',active:true,owner:true,createdAt:Date.now()})}catch{}
     return{uid:u.uid,code:'admin',name:'Admin',role:'admin'};
@@ -707,7 +721,7 @@ async function boot(){
       store=await makeCloud(cfg);
       store.onAuth(async u=>{
         detach();
-        if(!u){S.me=null;if(await trySso())return;S.boot='login';render();return}
+        if(!u){S.me=null;store.setPrefix(COLLECTION_PREFIX);if(await trySso())return;S.boot='login';render();return}
         try{S.me=await identify(u)}catch(e){S.loginErr=e.message;S.me=null;await store.signOut();return}
         S.loginErr='';S.boot='ready';attach();render();
       });
@@ -930,7 +944,7 @@ function loginHtml(){
   <p class="err" id="lerr">${esc(S.loginErr||'')}</p>
   <button class="btn" type="submit">Log in</button>
   <p class="hint" style="text-align:center">Use the login ID and PIN your manager gave you.</p>
-</form><p class="small" style="text-align:center"><a href="../">Back to Rotawise</a></p></div>`}
+</form><p class="small" style="text-align:center">No login? Gas is free for your own shop: <a href="../hub/" target="_top">open Rotawise and create a shop</a>.</p></div>`}
 
 /* ----- home ----- */
 function homeHtml(){
@@ -1316,7 +1330,7 @@ function settingsHtml(){
    ${!isManager()?'<p class="hint" style="margin-bottom:0">Your manager can see your work in this app as you do it.</p>':''}
    ${allStores().length>1&&!isManager()?`<p class="hint" style="margin-bottom:0">Your store${stores().length===1?'':'s'}: ${stores().map(x=>esc(x.name)).join(', ')||'none'}</p>`:''}</div>
   ${isAdmin()?storesCard():''}
-  ${isAdmin()?`<h2>Employees and logins</h2>
+  ${isAdmin()&&!shopMode()?`<h2>Employees and logins</h2>
   <div class="card">${store.mode!=='cloud'?'<p class="muted">Employee logins need the online database.</p>':`
    ${staff.length?`<div class="list" style="border:0">${staff.map(s=>`<div class="li" style="padding:10px 0"><div class="grow"><b>${esc(s.name)}</b> ${online(s.id)?'<span class="dot"></span>':''}<div class="meta">Code <b>${esc(s.code)}</b> · ${ROLE_LABEL[s.role]||'Staff'}${allStores().length>1?' · '+(s.role==='staff'&&s.stores&&s.stores.length?s.stores.map(x=>esc(storeName(x))).join(', '):'all stores'):''}${s.email?' · ✉ '+esc(s.email):' · no email'}${s.active?'':' · <span class="t-bad">switched off</span>'}</div></div>
      <button class="btn sm sec" data-act="staff-edit" data-id="${esc(s.id)}">Manage</button></div>`).join('')}</div>`:'<p class="muted">No employees yet.</p>'}
@@ -1328,7 +1342,7 @@ function settingsHtml(){
    <div class="row wrap"><label class="btn sm" for="xlin" tabindex="0">Import orders from Excel</label><input id="xlin" class="vh" type="file" accept=".xlsx,.xlsm,.xls">
    <button class="btn sec sm" data-act="export-xlsx">Download Excel${multi()?` (${curStore()==='all'?'all stores':esc(storeName(curStore()))})`:''}</button></div>
    <p class="hint">Import reads the Deliveries sheet (your tracker or a file downloaded from here), including stock. Rows already imported are skipped. Download gives a workbook with the Value formulas, a Dashboard with COUNTIF/SUMIF formulas, and the stock records.</p></div>`:''}
-  ${isAdmin()?`<h2>Email reminders</h2>
+  ${isAdmin()&&!shopMode()?`<h2>Email reminders</h2>
   <div class="card f">
    <div class="banner ${cfg.runnerLastRun&&Date.now()-cfg.runnerLastRun<45*60000?'info':'warn'}" style="margin:0">${cfg.runnerLastRun?`Email sender last checked ${ago(cfg.runnerLastRun)}.`:'The email sender is not set up yet. It runs in your Google account (Google Apps Script) and checks every 15 minutes.'}</div>
    <label class="row"><input type="checkbox" id="cfg-sum" ${cfg.summaryOn?'checked':''}> Daily summary email (unpaid orders, flags, low stock, reminders)</label>
@@ -1352,7 +1366,7 @@ function storesCard(){
    <div class="list" style="border:0">${allStores().map(x=>`<div class="li" style="padding:10px 0"><div class="grow"><b>${esc(x.name)}</b> ${x.active===false?'<span class="tag t-mute">Not in use</span>':''}
      <div class="meta">Order IDs ${esc(storePrefix(x.id))}-0001 · ${n(x.id)} order${n(x.id)===1?'':'s'}${x.address?' · '+esc(x.address):''}</div></div>
      <button class="btn sm sec" data-act="store-edit" data-id="${esc(x.id)}">Edit</button></div>`).join('')}</div>
-   <div class="row wrap" style="margin-top:8px"><button class="btn sm" data-act="store-new">Add store</button>${store.mode==='cloud'?'<button class="btn sm sec" data-act="rw-stores">Add stores from Rotawise</button>':''}</div>
+   <div class="row wrap" style="margin-top:8px"><button class="btn sm" data-act="store-new">Add store</button>${store.mode==='cloud'&&!shopMode()?'<button class="btn sm sec" data-act="rw-stores">Add stores from Rotawise</button>':''}</div>
    <p class="hint">Each store has its own orders, sales, stock and order numbers. Pick a store at the top of each page, or All stores to see totals. To keep an employee to their store, tick it under Manage.</p></div>`;
 }
 

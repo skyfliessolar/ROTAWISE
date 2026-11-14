@@ -91,6 +91,38 @@ service cloud.firestore {
     match /gas_admin/{id} {
       allow read, write: if isAdmin();
     }
+    // ---- Rotawise hub: free shops anyone can create ----
+    // Each shop has its own login shop-<id>@shops.rotawise.app. Its password sits in hub_keys/<id>:
+    // readable by anyone while the shop is open, otherwise only by the shop itself and the admin.
+    function shopUser(s) { return s != 'main' && signedIn() && request.auth.token.email == ('shop-' + s + '@shops.rotawise.app'); }
+    function validShop() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'nameLower', 'access', 'createdAt', 'updatedAt', 'hidden'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 60
+        && d.nameLower == d.name.lower() && d.access in ['open', 'password'];
+    }
+    match /hub_shops/{s} {
+      allow read: if true;
+      allow create: if shopUser(s) && validShop();
+      allow update: if (shopUser(s) || isAdmin()) && validShop();
+      allow delete: if isAdmin();
+      // a shop's own data (Gas, Goods Orders, Rota, Cash...). 'main' is the business itself.
+      match /{rest=**} {
+        allow read, write: if shopUser(s) || isAdmin() || (s == 'main' && isStaff());
+      }
+    }
+    match /hub_keys/{s} {
+      allow get: if shopUser(s) || isAdmin() || get(/databases/$(database)/documents/hub_shops/$(s)).data.access == 'open';
+      allow list: if isAdmin();
+      allow create, update: if (shopUser(s) || isAdmin())
+        && request.resource.data.keys().hasOnly(['pw', 'updatedAt'])
+        && request.resource.data.pw is string && request.resource.data.pw.size() >= 4;
+      allow delete: if isAdmin();
+    }
+    match /hub_settings/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
     // Copy of the Rotawise (Supabase) data: admin only
     match /{coll}/{doc} {
       allow read, write: if coll.matches('rw_[a-z_]+') && isAdmin();
