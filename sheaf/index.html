@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.scan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.scan-page{border:1px solid var(--line,#ddd);border-radius:10px;overflow:hidden;background:#fff}.scan-thumb{width:100%;height:auto;display:block}.scan-bar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px;font-size:12px}.scan-bar span{flex:1;font-weight:600;color:#333}
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.scan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.scan-page{border:1px solid var(--line,#ddd);border-radius:10px;overflow:hidden;background:#fff;cursor:grab}.scan-page.drag{opacity:.4}.scan-thumb{width:100%;height:auto;display:block;cursor:pointer}.scan-bar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px;font-size:12px}.scan-bar span{flex:1;font-weight:600;color:#333}.scan-add{border:2px dashed var(--line,#ccc);border-radius:10px;background:transparent;color:inherit;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:inherit;cursor:pointer}.scan-add b{font-size:34px;line-height:1}.scan-save{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:14px}.scan-save label{display:flex;flex-direction:column;gap:4px}@media(max-width:560px){.scan-save{grid-template-columns:1fr}}.scan-cam{position:fixed;inset:0;z-index:200;background:#000;display:flex;flex-direction:column}.scan-cam.flash{background:#fff}.scan-cam.flash .scan-video{opacity:.3}.scan-video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}.scan-cam-tip{position:absolute;top:12px;left:12px;right:12px;text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}.scan-cam-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 22px calc(16px + env(safe-area-inset-bottom));background:#000}.scan-cam-x{background:none;border:0;color:#fff;font:600 17px/1 inherit;padding:12px;min-width:72px;text-align:left;cursor:pointer}.scan-shutter{width:72px;height:72px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:inset 0 0 0 3px #000;cursor:pointer}.scan-shutter:active{transform:scale(.92)}.scan-last{position:relative;width:72px;height:72px;display:flex;align-items:center;justify-content:flex-end}.scan-last canvas{max-width:56px;max-height:72px;border:2px solid #fff;border-radius:4px}.scan-count{position:absolute;top:-6px;right:-6px;min-width:24px;height:24px;border-radius:12px;background:#2563eb;color:#fff;font:700 13px/24px sans-serif;text-align:center;padding:0 6px}.scan-stage{position:relative;align-self:center;max-width:100%;touch-action:none}.scan-crop-img{display:block;max-width:100%;max-height:58vh;width:auto;height:auto}.scan-crop-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.scan-crop-svg polygon{fill:rgba(37,99,235,.15);stroke:#2563eb;stroke-width:6;vector-effect:non-scaling-stroke}.scan-h{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:#fff;border:4px solid #2563eb;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:grab;touch-action:none}.scan-crop-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.scan-modes{display:flex;gap:4px;margin-left:auto}.scan-xl-bar,.scan-xl-tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.scan-xl-one{display:flex;align-items:center;gap:4px;font-size:13px;margin-left:auto}.scan-xl-scroll{overflow:auto;max-height:55vh;border:1px solid var(--line,#ddd);border-radius:8px}.scan-xl-t{border-collapse:collapse;font-size:13px}.scan-xl-t th{background:var(--bg,#f4f5f7);color:var(--muted,#667);font-weight:600;padding:4px 6px;border:1px solid var(--line,#ddd);position:sticky;top:0}.scan-xl-t tbody th{position:sticky;left:0;text-align:right}.scan-xl-t td{border:1px solid var(--line,#ddd);padding:0}.scan-xl-t input{border:0;padding:6px 7px;width:100%;min-width:90px;font:inherit;background:transparent;color:inherit}.scan-xl-t input:focus{outline:2px solid #2563eb;outline-offset:-2px;background:#eef4ff}.scan-xl-t input.num{text-align:right;color:#1d4ed8}.scan-txt{width:100%;font:14px/1.5 ui-monospace,monospace;margin-top:4px}
 </style></head><body>
 <title>Sheaf Document Studio</title>
 <script>
@@ -442,7 +442,7 @@ input.fld[type=checkbox]{padding:0;margin:0;accent-color:#2B3FC4}
   .tbar h2{font-size:15px}
 }
 
-.scan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.scan-page{border:1px solid var(--line,#ddd);border-radius:10px;overflow:hidden;background:#fff}.scan-thumb{width:100%;height:auto;display:block}.scan-bar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px;font-size:12px}.scan-bar span{flex:1;font-weight:600;color:#333}
+.scan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}.scan-page{border:1px solid var(--line,#ddd);border-radius:10px;overflow:hidden;background:#fff;cursor:grab}.scan-page.drag{opacity:.4}.scan-thumb{width:100%;height:auto;display:block;cursor:pointer}.scan-bar{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px;font-size:12px}.scan-bar span{flex:1;font-weight:600;color:#333}.scan-add{border:2px dashed var(--line,#ccc);border-radius:10px;background:transparent;color:inherit;min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:inherit;cursor:pointer}.scan-add b{font-size:34px;line-height:1}.scan-save{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:14px}.scan-save label{display:flex;flex-direction:column;gap:4px}@media(max-width:560px){.scan-save{grid-template-columns:1fr}}.scan-cam{position:fixed;inset:0;z-index:200;background:#000;display:flex;flex-direction:column}.scan-cam.flash{background:#fff}.scan-cam.flash .scan-video{opacity:.3}.scan-video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}.scan-cam-tip{position:absolute;top:12px;left:12px;right:12px;text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}.scan-cam-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 22px calc(16px + env(safe-area-inset-bottom));background:#000}.scan-cam-x{background:none;border:0;color:#fff;font:600 17px/1 inherit;padding:12px;min-width:72px;text-align:left;cursor:pointer}.scan-shutter{width:72px;height:72px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:inset 0 0 0 3px #000;cursor:pointer}.scan-shutter:active{transform:scale(.92)}.scan-last{position:relative;width:72px;height:72px;display:flex;align-items:center;justify-content:flex-end}.scan-last canvas{max-width:56px;max-height:72px;border:2px solid #fff;border-radius:4px}.scan-count{position:absolute;top:-6px;right:-6px;min-width:24px;height:24px;border-radius:12px;background:#2563eb;color:#fff;font:700 13px/24px sans-serif;text-align:center;padding:0 6px}.scan-stage{position:relative;align-self:center;max-width:100%;touch-action:none}.scan-crop-img{display:block;max-width:100%;max-height:58vh;width:auto;height:auto}.scan-crop-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.scan-crop-svg polygon{fill:rgba(37,99,235,.15);stroke:#2563eb;stroke-width:6;vector-effect:non-scaling-stroke}.scan-h{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;background:#fff;border:4px solid #2563eb;box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:grab;touch-action:none}.scan-crop-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.scan-modes{display:flex;gap:4px;margin-left:auto}.scan-xl-bar,.scan-xl-tabs{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.scan-xl-one{display:flex;align-items:center;gap:4px;font-size:13px;margin-left:auto}.scan-xl-scroll{overflow:auto;max-height:55vh;border:1px solid var(--line,#ddd);border-radius:8px}.scan-xl-t{border-collapse:collapse;font-size:13px}.scan-xl-t th{background:var(--bg,#f4f5f7);color:var(--muted,#667);font-weight:600;padding:4px 6px;border:1px solid var(--line,#ddd);position:sticky;top:0}.scan-xl-t tbody th{position:sticky;left:0;text-align:right}.scan-xl-t td{border:1px solid var(--line,#ddd);padding:0}.scan-xl-t input{border:0;padding:6px 7px;width:100%;min-width:90px;font:inherit;background:transparent;color:inherit}.scan-xl-t input:focus{outline:2px solid #2563eb;outline-offset:-2px;background:#eef4ff}.scan-xl-t input.num{text-align:right;color:#1d4ed8}.scan-txt{width:100%;font:14px/1.5 ui-monospace,monospace;margin-top:4px}
 </style>
 <div id="app">
   <header class="topbar">
@@ -3052,16 +3052,77 @@ function mountOrganize(view, def, mode = 'organize') {
   return { load };
 }
 
-/* ================= Scan paper with the camera ================= */
+/* ================= Scan paper with the camera =================
+   Works like a phone scanner app: keep the camera open and snap page after page, the paper's edges are found
+   by themselves (drag the corners to fix them), then reorder, turn, clean up and save everything as one PDF,
+   or read the words into Word, a spreadsheet you can fix before saving, or text. Nothing leaves the device. */
 const SCAN_OCR = '../gas/ocr/';
-function scanEnhance(src, mode) {
-  // shrink big phone photos, then (for "Clean") turn grey paper white and keep the ink dark
-  const { w, h: hh } = drawableSize(src); const k = Math.min(1, 2200 / Math.max(w, hh));
-  const cv = h('canvas', { width: Math.round(w * k), height: Math.round(hh * k) }); const cx = cv.getContext('2d', { willReadFrequently: true });
-  cx.drawImage(src, 0, 0, cv.width, cv.height);
-  if (mode === 'colour') return cv;
-  const im = cx.getImageData(0, 0, cv.width, cv.height), d = im.data, n = cv.width * cv.height, g = new Uint8Array(n), hist = new Uint32Array(256);
+const SCAN_MAX = 2200;
+function scanBase(src) {
+  const { w, h: hh } = drawableSize(src); const k = Math.min(1, SCAN_MAX / Math.max(w, hh));
+  const cv = h('canvas', { width: Math.max(1, Math.round(w * k)), height: Math.max(1, Math.round(hh * k)) });
+  cv.getContext('2d').drawImage(src, 0, 0, cv.width, cv.height); return cv;
+}
+/* find the sheet of paper: the biggest bright patch, then its four corners. null = use the whole photo */
+function scanFindPaper(cv) {
+  const k = Math.min(1, 256 / Math.max(cv.width, cv.height)), W = Math.max(8, Math.round(cv.width * k)), H = Math.max(8, Math.round(cv.height * k));
+  const sm = h('canvas', { width: W, height: H }); const sx = sm.getContext('2d', { willReadFrequently: true }); sx.drawImage(cv, 0, 0, W, H);
+  const d = sx.getImageData(0, 0, W, H).data, n = W * H, g = new Uint8Array(n), hist = new Float64Array(256);
   for (let i = 0; i < n; i++) { const v = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8; g[i] = v; hist[v]++; }
+  // Otsu threshold between "paper" and "table"
+  let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let sB = 0, wB = 0, best = 0, t = 128; for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += i * hist[i]; const mB = sB / wB, mF = (sum - sB) / wF, v = wB * wF * (mB - mF) * (mB - mF); if (v > best) { best = v; t = i; } }
+  const lab = new Int32Array(n).fill(-1); let bestId = -1, bestN = 0; const stack = new Int32Array(n);
+  for (let s0 = 0; s0 < n; s0++) {
+    if (lab[s0] !== -1 || g[s0] <= t) continue; let sp = 0, cnt = 0; stack[sp++] = s0; lab[s0] = s0;
+    while (sp) { const p = stack[--sp]; cnt++; const x = p % W, y = (p / W) | 0;
+      if (x > 0 && lab[p - 1] === -1 && g[p - 1] > t) { lab[p - 1] = s0; stack[sp++] = p - 1; }
+      if (x < W - 1 && lab[p + 1] === -1 && g[p + 1] > t) { lab[p + 1] = s0; stack[sp++] = p + 1; }
+      if (y > 0 && lab[p - W] === -1 && g[p - W] > t) { lab[p - W] = s0; stack[sp++] = p - W; }
+      if (y < H - 1 && lab[p + W] === -1 && g[p + W] > t) { lab[p + W] = s0; stack[sp++] = p + W; } }
+    if (cnt > bestN) { bestN = cnt; bestId = s0; }
+  }
+  if (bestN < n * 0.18 || bestN > n * 0.93) return null;
+  let tl = [0, 0, 1e9], br = [0, 0, -1e9], tr = [0, 0, -1e9], bl = [0, 0, 1e9];
+  for (let p = 0; p < n; p++) { if (lab[p] !== bestId) continue; const x = p % W, y = (p / W) | 0, a = x + y, b = x - y;
+    if (a < tl[2]) tl = [x, y, a]; if (a > br[2]) br = [x, y, a]; if (b > tr[2]) tr = [x, y, b]; if (b < bl[2]) bl = [x, y, b]; }
+  const q = [tl, tr, br, bl].map(([x, y]) => [Math.min(cv.width, (x + 0.5) / k), Math.min(cv.height, (y + 0.5) / k)]);
+  // touching every edge = the paper fills the photo: nothing to cut
+  const touch = q.every(([x, y]) => x < cv.width * 0.03 || x > cv.width * 0.97 || y < cv.height * 0.03 || y > cv.height * 0.97);
+  return touch ? null : q;
+}
+/* straighten the paper: map the four corners onto a flat rectangle */
+function scanHomography(src, dst) {
+  const A = [], B = [];
+  for (let i = 0; i < 4; i++) { const [x, y] = src[i], [u, v] = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); B.push(u); A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); B.push(v); }
+  for (let c = 0; c < 8; c++) { let p = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]]; [B[c], B[p]] = [B[p], B[c]];
+    for (let r = 0; r < 8; r++) { if (r === c) continue; const f = A[r][c] / A[c][c]; for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k]; B[r] -= f * B[c]; } }
+  return B.map((b, i) => b / A[i][i]);
+}
+function scanWarp(cv, q) {
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  let W = Math.round(Math.max(dist(q[0], q[1]), dist(q[3], q[2]))), H = Math.round(Math.max(dist(q[0], q[3]), dist(q[1], q[2])));
+  const k = Math.min(1, SCAN_MAX / Math.max(W, H)); W = Math.max(8, Math.round(W * k)); H = Math.max(8, Math.round(H * k));
+  const m = scanHomography([[0, 0], [W, 0], [W, H], [0, H]], q);   // output pixel -> photo pixel
+  const sw = cv.width, sh = cv.height, sd = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data;
+  const out = h('canvas', { width: W, height: H }), ox = out.getContext('2d'), im = ox.createImageData(W, H), od = im.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const z = m[6] * x + m[7] * y + 1, fx = (m[0] * x + m[1] * y + m[2]) / z, fy = (m[3] * x + m[4] * y + m[5]) / z;
+    const x0 = Math.max(0, Math.min(sw - 2, fx | 0)), y0 = Math.max(0, Math.min(sh - 2, fy | 0)), tx = Math.max(0, Math.min(1, fx - x0)), ty = Math.max(0, Math.min(1, fy - y0));
+    const i00 = (y0 * sw + x0) * 4, i10 = i00 + 4, i01 = i00 + sw * 4, i11 = i01 + 4, o = (y * W + x) * 4;
+    for (let c = 0; c < 3; c++) od[o + c] = (sd[i00 + c] * (1 - tx) + sd[i10 + c] * tx) * (1 - ty) + (sd[i01 + c] * (1 - tx) + sd[i11 + c] * tx) * ty;
+    od[o + 3] = 255;
+  }
+  ox.putImageData(im, 0, 0); return out;
+}
+function scanEnhance(src, mode) {
+  const cv = h('canvas', { width: src.width, height: src.height }); const cx = cv.getContext('2d', { willReadFrequently: true });
+  cx.drawImage(src, 0, 0);
+  if (mode === 'colour') return cv;
+  const im = cx.getImageData(0, 0, cv.width, cv.height), d = im.data, n = cv.width * cv.height, g = new Uint8Array(n);
+  for (let i = 0; i < n; i++) g[i] = (d[i * 4] * 77 + d[i * 4 + 1] * 150 + d[i * 4 + 2] * 29) >> 8;
   if (mode === 'clean') {
     // paper brightness changes across a photo (shadows), so compare each dot with the paper around it
     const S = 24, gw = Math.ceil(cv.width / S), gh = Math.ceil(cv.height / S), bg = new Float32Array(gw * gh);
@@ -3080,6 +3141,7 @@ function scanEnhance(src, mode) {
   cx.putImageData(im, 0, 0); return cv;
 }
 function scanRotate(cv) { const o = h('canvas', { width: cv.height, height: cv.width }); const x = o.getContext('2d'); x.translate(o.width, 0); x.rotate(Math.PI / 2); x.drawImage(cv, 0, 0); return o; }
+function scanBuild(p) { let c = p.q ? scanWarp(p.base, p.q) : p.base; for (let i = 0; i < p.rot; i++) c = scanRotate(c); p.cv = scanEnhance(c, p.mode); return p; }
 async function scanOcr(pages, b) {
   if (!window.Tesseract) await loadScript(SCAN_OCR + 'tesseract.min.js');
   const w = await Tesseract.createWorker('eng', 1, { workerPath: SCAN_OCR + 'worker.min.js', corePath: SCAN_OCR, langPath: SCAN_OCR, gzip: true });
@@ -3089,81 +3151,205 @@ async function scanOcr(pages, b) {
   finally { await w.terminate(); }
   return out;
 }
+const scanCell = c => { const t = String(c == null ? '' : c).trim(), n = t.replace(/[£$€,]/g, ''); return /^-?\d+(\.\d+)?$/.test(n) && !/^0\d/.test(n) ? Number(n) : t; };
+const scanRows = pg => pg.filter(l => l.trim()).map(l => l.trim().split(/\s{2,}|\t+/).map(c => c.trim()));
+
+/* a small spreadsheet to fix what was read before saving it as Excel */
+function scanSheetEditor(sheets, name, onSave) {
+  const st = { i: 0, one: false, r: 0, c: 0 };
+  const cols = n => Array.from({ length: n }, (_, i) => String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(i / 26 | 0) : ''));
+  const cur = () => st.one ? { name: 'All pages', rows: sheets.flatMap(s => s.rows) } : sheets[st.i];
+  const wrap = h('div', { class: 'scan-xl' });
+  function draw() {
+    const s = cur(); if (!s.rows.length) s.rows.push(['']);
+    const n = Math.max(1, ...s.rows.map(r => r.length)); s.rows.forEach(r => { while (r.length < n) r.push(''); });
+    const tbl = h('table', { class: 'scan-xl-t' }, h('thead', null, h('tr', null, h('th', null, ''), cols(n).map(c => h('th', null, c)))),
+      h('tbody', null, s.rows.map((r, ri) => h('tr', null, h('th', null, String(ri + 1)), r.map((v, ci) => h('td', null, h('input', { value: v, 'data-r': ri, 'data-c': ci,
+        class: typeof scanCell(v) === 'number' ? 'num' : null,
+        oninput: e => { r[ci] = e.target.value; e.target.className = typeof scanCell(e.target.value) === 'number' ? 'num' : ''; },
+        onfocus: () => { st.r = ri; st.c = ci; },
+        onkeydown: e => { const go = (dr, dc) => { const t = wrap.querySelector(`input[data-r="${ri + dr}"][data-c="${ci + dc}"]`); if (t) { e.preventDefault(); t.focus(); t.select(); } };
+          if (e.key === 'Enter' || e.key === 'ArrowDown') go(1, 0); else if (e.key === 'ArrowUp') go(-1, 0);
+          else if (e.key === 'ArrowRight' && e.target.selectionStart === e.target.value.length) go(0, 1); else if (e.key === 'ArrowLeft' && e.target.selectionStart === 0) go(0, -1); } })))))));
+    const tabs = sheets.length > 1 && !st.one ? h('div', { class: 'scan-xl-tabs' }, sheets.map((x, i) => h('button', { class: 'btn sm ' + (i === st.i ? 'primary' : 'ghost'), onclick: () => { st.i = i; draw(); } }, x.name))) : null;
+    const act = (t, f, id) => h('button', { class: 'btn sm ghost', id, onclick: () => { f(cur()); draw(); const t2 = wrap.querySelector(`input[data-r="${st.r}"][data-c="${st.c}"]`); t2 && t2.focus(); } }, t);
+    wrap.replaceChildren(
+      h('div', { class: 'scan-xl-bar' },
+        act('+ Row', s => s.rows.splice(st.r + 1, 0, s.rows[0].map(() => '')), 'xl-addrow'),
+        act('+ Column', s => s.rows.forEach(r => r.splice(st.c + 1, 0, '')), 'xl-addcol'),
+        act('Delete row', s => { if (s.rows.length > 1) { s.rows.splice(st.r, 1); st.r = Math.min(st.r, s.rows.length - 1); } }, 'xl-delrow'),
+        act('Delete column', s => { if (s.rows[0].length > 1) { s.rows.forEach(r => r.splice(st.c, 1)); st.c = Math.max(0, st.c - 1); } }, 'xl-delcol'),
+        act('Split cell', s => { const v = String(s.rows[st.r][st.c]); const parts = v.split(/\s+/); if (parts.length > 1) { s.rows[st.r].splice(st.c, 1, parts.slice(0, -1).join(' '), parts[parts.length - 1]); } }, 'xl-split'),
+        sheets.length > 1 ? h('label', { class: 'scan-xl-one' }, h('input', { type: 'checkbox', id: 'xl-one', checked: st.one, onchange: e => { st.one = e.target.checked; draw(); } }), ' All pages on one sheet') : null),
+      tabs, h('div', { class: 'scan-xl-scroll' }, tbl),
+      h('p', { class: 'side-note' }, 'Tap a cell to fix it. Numbers turn blue and are saved as numbers, so totals work in Excel. "Split cell" moves the last word of a cell into a new cell next to it.'));
+  }
+  draw();
+  modal({ title: 'Check the spreadsheet', body: wrap, wide: true, actions: [{ label: 'Cancel' }, { label: 'Save Excel file', kind: 'primary', icon: 'download', onClick: async () => { await onSave(st.one ? [cur()] : sheets); } }] });
+}
+function scanTextEditor(pages, kind, onSave) {
+  const areas = pages.map((t, i) => h('textarea', { class: 'inp scan-txt', 'data-page': i, rows: 10 }, t));
+  modal({ title: 'Check the words', wide: true,
+    body: h('div', null, h('p', { class: 'side-note' }, 'Fix anything that was misread, then save.'), areas.map((a, i) => h('div', null, pages.length > 1 ? h('b', null, 'Page ' + (i + 1)) : null, a))),
+    actions: [{ label: 'Cancel' }, { label: kind === 'docx' ? 'Save Word file' : 'Save text file', kind: 'primary', icon: 'download', onClick: async () => { await onSave(areas.map(a => a.value)); } }] });
+}
+
 function mountScan(view, def) {
-  const st = { pages: [], mode: 'clean', name: 'Scan ' + new Date().toISOString().slice(0, 10) };
-  const cam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'scan-cam', style: { display: 'none' }, onchange: e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) load(fs); } });
-  const camBtn = btn('Scan a page', { kind: 'primary', icon: 'image', onclick: () => cam.click() });
-  const addBtn = btn('Add photos', { kind: 'ghost', icon: 'plus', onclick: async () => { const fs = await pickFiles({ accept: accepts(['image']), multiple: true }); if (fs.length) load(fs); } });
+  const st = { pages: [], mode: 'clean', size: 'a4', name: 'Scan ' + new Date().toISOString().slice(0, 10) };
+  const cam = h('input', { type: 'file', accept: 'image/*', capture: 'environment', id: 'scan-cam', multiple: true, style: { display: 'none' }, onchange: e => { const fs = [...e.target.files]; e.target.value = ''; if (fs.length) load(fs); } });
+  const choose = async () => { const fs = await pickFiles({ accept: accepts(['image']), multiple: true }); if (fs.length) load(fs); };
+  const camBtn = btn('Scan pages', { kind: 'primary', icon: 'image', onclick: () => openCamera() });
+  const addBtn = btn('Add photos', { kind: 'ghost', icon: 'plus', onclick: choose });
   const { body } = toolPage(view, def, [addBtn, camBtn]);
   const intro = h('div', { class: 'card', style: { textAlign: 'center', padding: '28px 18px' } },
     h('h2', { style: { margin: '0 0 6px' } }, 'Scan paper with your camera'),
-    h('p', { class: 'side-note', style: { margin: '0 auto 16px', maxWidth: '460px' } }, 'Lay the page flat in good light and fill the screen with it. Add as many pages as you like, then save them as a PDF, a Word document, a spreadsheet or plain text.'),
+    h('p', { class: 'side-note', style: { margin: '0 auto 16px', maxWidth: '480px' } }, 'The camera stays open: snap every page one after another, then tap Done. The edges of the paper are found by themselves. Reorder, turn or crop pages, then save them all as one PDF, a Word file, a spreadsheet or text.'),
     h('div', { style: { display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' } },
-      btn('Open camera', { kind: 'primary', icon: 'image', onclick: () => cam.click() }),
-      btn('Choose photos', { kind: 'ghost', icon: 'upload', onclick: async () => { const fs = await pickFiles({ accept: accepts(['image']), multiple: true }); if (fs.length) load(fs); } })));
+      btn('Open camera', { kind: 'primary', icon: 'image', id: 'scan-open', onclick: () => openCamera() }),
+      btn('Choose photos', { kind: 'ghost', icon: 'upload', onclick: choose })));
   const card = h('div', { class: 'card' }); card.hidden = true;
   body.append(cam, intro, card);
+
+  function addCanvas(c) { const base = scanBase(c); let q = null; try { q = scanFindPaper(base); } catch (e) {} const p = { id: uid(), base, q, auto: q, rot: 0, mode: st.mode }; scanBuild(p); st.pages.push(p); return p; }
   async function load(files) {
     await withBusy('Adding pages', async b => { let i = 0; for (const f of files) { i++; await b.set(f.name, i / files.length);
-      try { const bm = await decodeImage(f); st.pages.push({ id: uid(), src: bm, rot: 0, cv: null }); } catch (e) { toast('Could not read ' + f.name, 'bad'); } } });
-    redo();
+      try { addCanvas(await decodeImage(f)); } catch (e) { toast('Could not read ' + f.name, 'bad'); } } });
+    render();
   }
-  function redo() { for (const p of st.pages) { let c = scanEnhance(p.src, st.mode); for (let i = 0; i < p.rot; i++) c = scanRotate(c); p.cv = c; } render(); }
+
+  /* ---- live camera: snap page after page ---- */
+  async function openCamera() {
+    if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) { cam.click(); return; }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 3840 }, height: { ideal: 2160 } }, audio: false }); }
+    catch (e) { cam.click(); return; }   // no permission or no camera: use the phone's own camera screen
+    const video = h('video', { autoplay: true, playsinline: true, muted: true, class: 'scan-video' }); video.srcObject = stream;
+    let shots = 0;
+    const count = h('span', { class: 'scan-count', id: 'scan-count' }, '0');
+    const thumb = h('div', { class: 'scan-last' }, count);
+    const close = () => { stream.getTracks().forEach(t => t.stop()); ov.remove(); document.removeEventListener('keydown', key); render(); };
+    const snap = async () => {
+      if (!video.videoWidth) return;
+      const c = h('canvas', { width: video.videoWidth, height: video.videoHeight }); c.getContext('2d').drawImage(video, 0, 0);
+      ov.classList.add('flash'); setTimeout(() => ov.classList.remove('flash'), 160);
+      await nextFrame(); const p = addCanvas(c); shots++; count.textContent = String(shots);
+      const t = h('canvas', { width: 60, height: Math.round(60 * p.cv.height / p.cv.width) }); t.getContext('2d').drawImage(p.cv, 0, 0, t.width, t.height);
+      thumb.replaceChildren(t, count);
+    };
+    const key = e => { if (e.key === 'Escape') close(); if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); snap(); } };
+    const ov = h('div', { class: 'scan-cam', role: 'dialog', 'aria-label': 'Camera' }, video,
+      h('div', { class: 'scan-cam-tip' }, 'Fill the screen with the page. Snap as many pages as you like.'),
+      h('div', { class: 'scan-cam-bar' },
+        h('button', { class: 'scan-cam-x', id: 'scan-done', onclick: close }, 'Done'),
+        h('button', { class: 'scan-shutter', id: 'scan-shutter', 'aria-label': 'Take picture', onclick: snap }),
+        thumb));
+    document.body.append(ov); document.addEventListener('keydown', key);
+  }
+
+  /* ---- fix one page: drag the corners, turn, filter ---- */
+  function editPage(p) {
+    const wrap = h('div', { class: 'scan-crop' });
+    const W = p.base.width, H = p.base.height;
+    let q = (p.q || [[0, 0], [W, 0], [W, H], [0, H]]).map(x => x.slice());
+    const img = h('canvas', { width: W, height: H, class: 'scan-crop-img' }); img.getContext('2d').drawImage(p.base, 0, 0);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'scan-crop-svg');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon'); svg.append(poly);
+    const hs = q.map((_, i) => h('div', { class: 'scan-h', 'data-h': i }));
+    const stage = h('div', { class: 'scan-stage' }, img, svg, ...hs);
+    const place = () => { poly.setAttribute('points', q.map(x => x.join(',')).join(' ')); hs.forEach((e, i) => { e.style.left = (q[i][0] / W * 100) + '%'; e.style.top = (q[i][1] / H * 100) + '%'; }); };
+    hs.forEach((e, i) => e.addEventListener('pointerdown', ev => { ev.preventDefault(); e.setPointerCapture(ev.pointerId);
+      const mv = m => { const r = stage.getBoundingClientRect(); q[i] = [Math.max(0, Math.min(W, (m.clientX - r.left) / r.width * W)), Math.max(0, Math.min(H, (m.clientY - r.top) / r.height * H))]; place(); };
+      const up = () => { e.removeEventListener('pointermove', mv); e.removeEventListener('pointerup', up); };
+      e.addEventListener('pointermove', mv); e.addEventListener('pointerup', up); }));
+    let mode = p.mode, rot = p.rot;
+    const modes = h('div', { class: 'scan-modes' }, [['clean', 'Clean'], ['grey', 'Grey'], ['colour', 'Colour']].map(([k, t]) => h('button', { class: 'btn sm ' + (mode === k ? 'primary' : 'ghost'), 'data-pmode': k, onclick: e => { mode = k; modes.querySelectorAll('button').forEach(b => b.className = 'btn sm ' + (b.dataset.pmode === k ? 'primary' : 'ghost')); } }, t)));
+    wrap.append(h('p', { class: 'side-note' }, 'Drag the four dots onto the corners of the paper. The page is straightened when you tap Apply.'), stage,
+      h('div', { class: 'scan-crop-bar' },
+        h('button', { class: 'btn sm ghost', id: 'crop-auto', onclick: () => { const a = p.auto || scanFindPaper(p.base); if (a) { q = a.map(x => x.slice()); place(); } else toast('Could not find the edges: drag the dots yourself.'); } }, 'Find edges'),
+        h('button', { class: 'btn sm ghost', id: 'crop-all', onclick: () => { q = [[0, 0], [W, 0], [W, H], [0, H]]; place(); } }, 'Whole photo'),
+        h('button', { class: 'btn sm ghost', id: 'crop-turn', onclick: () => { rot = (rot + 1) % 4; toast('Page will be turned ' + (rot * 90) + '°'); } }, 'Turn'),
+        modes));
+    place();
+    modal({ title: 'Page ' + (st.pages.indexOf(p) + 1), body: wrap, wide: true, actions: [{ label: 'Cancel' }, { label: 'Apply', kind: 'primary', onClick: async () => {
+      const whole = q[0][0] < 2 && q[0][1] < 2 && q[1][0] > W - 2 && q[1][1] < 2 && q[2][0] > W - 2 && q[2][1] > H - 2 && q[3][0] < 2 && q[3][1] > H - 2;
+      p.q = whole ? null : q; p.mode = mode; p.rot = rot; await withBusy('Straightening the page', async () => { await nextFrame(); scanBuild(p); }); render(); } }] });
+  }
+
   function render() {
     const any = st.pages.length > 0; intro.hidden = any; card.hidden = !any; if (!any) return;
     const modes = [['clean', 'Clean (black on white)'], ['grey', 'Grey'], ['colour', 'Colour']];
+    const move = (i, j) => { st.pages.splice(j, 0, st.pages.splice(i, 1)[0]); render(); };
+    let dragFrom = -1;
     card.replaceChildren(
       h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '12px' } },
-        h('b', null, st.pages.length + (st.pages.length === 1 ? ' page' : ' pages')),
+        h('b', { id: 'scan-total' }, st.pages.length + (st.pages.length === 1 ? ' page' : ' pages')),
         h('span', { style: { flex: '1' } }),
-        ...modes.map(([k, t]) => h('button', { class: 'btn sm ' + (st.mode === k ? 'primary' : 'ghost'), 'data-scanmode': k, onclick: () => { st.mode = k; redo(); } }, t))),
+        ...modes.map(([k, t]) => h('button', { class: 'btn sm ' + (st.mode === k ? 'primary' : 'ghost'), 'data-scanmode': k, onclick: async () => { st.mode = k;
+          await withBusy('Updating pages', async () => { await nextFrame(); st.pages.forEach(p => { p.mode = k; scanBuild(p); }); }); render(); } }, t))),
       h('div', { class: 'scan-grid' }, st.pages.map((p, i) => {
-        const t = h('canvas', { width: p.cv.width, height: p.cv.height, class: 'scan-thumb' }); t.getContext('2d').drawImage(p.cv, 0, 0);
-        return h('div', { class: 'scan-page' }, t, h('div', { class: 'scan-bar' }, h('span', null, 'Page ' + (i + 1)),
-          h('button', { class: 'btn sm ghost', title: 'Turn this page', onclick: () => { p.rot = (p.rot + 1) % 4; redo(); } }, 'Turn'),
-          i > 0 ? h('button', { class: 'btn sm ghost', title: 'Move earlier', onclick: () => { st.pages.splice(i - 1, 0, st.pages.splice(i, 1)[0]); render(); } }, '↑') : null,
+        const t = h('canvas', { width: p.cv.width, height: p.cv.height, class: 'scan-thumb', title: 'Tap to crop or fix this page', onclick: () => editPage(p) }); t.getContext('2d').drawImage(p.cv, 0, 0);
+        const el = h('div', { class: 'scan-page', draggable: 'true', 'data-i': i,
+          ondragstart: () => { dragFrom = i; el.classList.add('drag'); }, ondragend: () => el.classList.remove('drag'),
+          ondragover: e => e.preventDefault(), ondrop: e => { e.preventDefault(); if (dragFrom >= 0 && dragFrom !== i) move(dragFrom, i); } },
+          t, h('div', { class: 'scan-bar' }, h('span', null, 'Page ' + (i + 1)),
+          h('button', { class: 'btn sm ghost', title: 'Crop or fix', 'data-act': 'edit', onclick: () => editPage(p) }, 'Crop'),
+          h('button', { class: 'btn sm ghost', title: 'Turn this page', onclick: () => { p.rot = (p.rot + 1) % 4; scanBuild(p); render(); } }, 'Turn'),
+          i > 0 ? h('button', { class: 'btn sm ghost', title: 'Move earlier', 'data-act': 'up', onclick: () => move(i, i - 1) }, '↑') : null,
+          i < st.pages.length - 1 ? h('button', { class: 'btn sm ghost', title: 'Move later', 'data-act': 'down', onclick: () => move(i, i + 1) }, '↓') : null,
           h('button', { class: 'btn sm ghost', title: 'Remove this page', onclick: () => { st.pages.splice(i, 1); render(); } }, 'Remove')));
-      })),
-      h('label', { class: 'side-note', style: { display: 'block', margin: '14px 0 4px' } }, 'File name'),
-      h('input', { class: 'input', id: 'scan-name', value: st.name, oninput: e => { st.name = e.target.value; } }),
+        return el;
+      }), h('button', { class: 'scan-add', id: 'scan-more', onclick: () => openCamera() }, h('b', null, '+'), 'Add more pages')),
+      h('div', { class: 'scan-save' },
+        h('label', { class: 'side-note' }, 'File name', h('input', { class: 'input', id: 'scan-name', value: st.name, oninput: e => { st.name = e.target.value; } })),
+        h('label', { class: 'side-note' }, 'PDF page size', h('select', { class: 'input', id: 'scan-size', onchange: e => { st.size = e.target.value; } },
+          [['a4', 'A4'], ['letter', 'US Letter'], ['fit', 'Same as the photo']].map(([k, t]) => h('option', { value: k, selected: st.size === k }, t))))),
       h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' } },
         btn('Save as PDF', { kind: 'primary', icon: 'download', onclick: () => save('pdf') }),
+        navigator.canShare ? btn('Share PDF', { kind: 'ghost', icon: 'upload', id: 'scan-share', onclick: () => save('share') }) : null,
         btn('Save as Word', { kind: 'ghost', icon: 'download', onclick: () => save('docx') }),
         btn('Save as Excel', { kind: 'ghost', icon: 'download', onclick: () => save('xlsx') }),
         btn('Save as text', { kind: 'ghost', icon: 'download', onclick: () => save('txt') }),
         btn('Save as pictures', { kind: 'ghost', icon: 'download', onclick: () => save('jpg') })),
-      h('p', { class: 'side-note', style: { marginTop: '10px' } }, 'PDF and pictures keep the page exactly as photographed. Word, Excel and text read the words off the page: check them, because handwriting and blurry photos are not read reliably. Everything stays on this device.'));
+      h('p', { class: 'side-note', style: { marginTop: '10px' } }, 'All pages go into one file, in this order: drag a page or use ↑ ↓ to change it. PDF and pictures keep each page as photographed. Word, Excel and text read the words off the page and let you fix them before saving. Everything stays on this device.'));
   }
   const jpg = cv => new Promise(r => cv.toBlob(r, 'image/jpeg', 0.85));
+  const fname = () => (st.name || 'Scan').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Scan';
+  async function makePdf(b) {
+    await need('pdflib'); const doc = await PDFLib.PDFDocument.create(); let i = 0;
+    for (const p of st.pages) { i++; if (b) await b.set('Page ' + i, i / st.pages.length);
+      const img = await doc.embedJpg(await (await jpg(p.cv)).arrayBuffer()); const land = p.cv.width > p.cv.height;
+      let W, H, m = 12;
+      if (st.size === 'fit') { W = 595.28; H = W * img.height / img.width; m = 0; }
+      else { const [a, c] = st.size === 'letter' ? [612, 792] : [595.28, 841.89]; W = land ? c : a; H = land ? a : c; }
+      const k = Math.min((W - 2 * m) / img.width, (H - 2 * m) / img.height); const pg = doc.addPage([W, H]);
+      pg.drawImage(img, { x: (W - img.width * k) / 2, y: (H - img.height * k) / 2, width: img.width * k, height: img.height * k }); }
+    doc.setTitle(fname()); return new Blob([await doc.save()], { type: 'application/pdf' });
+  }
   async function save(kind) {
-    const name = (st.name || 'Scan').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Scan';
+    const name = fname();
     try {
-      await withBusy('Saving', async b => {
-        if (kind === 'pdf') {
-          await need('pdflib'); const doc = await PDFLib.PDFDocument.create(); let i = 0;
-          for (const p of st.pages) { i++; await b.set('Page ' + i, i / st.pages.length);
-            const img = await doc.embedJpg(await (await jpg(p.cv)).arrayBuffer()); const land = p.cv.width > p.cv.height; const W = land ? 841.89 : 595.28, H = land ? 595.28 : 841.89, m = 12;
-            const k = Math.min((W - 2 * m) / img.width, (H - 2 * m) / img.height); const pg = doc.addPage([W, H]);
-            pg.drawImage(img, { x: (W - img.width * k) / 2, y: (H - img.height * k) / 2, width: img.width * k, height: img.height * k }); }
-          doc.setTitle(name); await saveFile(new Blob([await doc.save()], { type: 'application/pdf' }), name + '.pdf'); return;
-        }
-        if (kind === 'jpg') { let i = 0; for (const p of st.pages) { i++; await saveFile(await jpg(p.cv), name + (st.pages.length > 1 ? ' p' + i : '') + '.jpg'); } return; }
-        const text = await scanOcr(st.pages, b);
-        if (!text.some(pg => pg.some(l => l.trim()))) { toast('No words could be read from these pages. Save as PDF instead, or retake the photo closer and sharper.', 'bad'); return; }
-        if (kind === 'txt') { await saveFile(new Blob([text.map(pg => pg.join('\n').trim()).join('\n\n----------\n\n')], { type: 'text/plain' }), name + '.txt'); return; }
-        if (kind === 'docx') {
-          await need('docx'); const D = window.docx; const kids = [];
-          text.forEach((pg, pi) => { const lines = pg.join('\n').trim().split('\n'); let para = [];
-            const flush = () => { if (para.length) { kids.push(new D.Paragraph({ children: [new D.TextRun(para.join(' ').replace(/\s+/g, ' '))], spacing: { after: 160 }, pageBreakBefore: pi > 0 && !kids._pb })); if (pi > 0) kids._pb = true; para = []; } };
-            kids._pb = false; for (const l of lines) { if (!l.trim()) flush(); else para.push(l.trim()); } flush(); });
-          const doc = new D.Document({ sections: [{ children: kids }] }); await saveFile(await D.Packer.toBlob(doc), name + '.docx'); return;
-        }
-        if (kind === 'xlsx') {
+      if (kind === 'pdf') { await withBusy('Making the PDF', async b => saveFile(await makePdf(b), name + '.pdf')); return; }
+      if (kind === 'share') { await withBusy('Making the PDF', async b => { const f = new File([await makePdf(b)], name + '.pdf', { type: 'application/pdf' });
+        if (navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: name }).catch(() => {}); else await saveFile(f, name + '.pdf'); }); return; }
+      if (kind === 'jpg') { await withBusy('Saving', async () => { let i = 0; for (const p of st.pages) { i++; await saveFile(await jpg(p.cv), name + (st.pages.length > 1 ? ' p' + i : '') + '.jpg'); } }); return; }
+      const text = await withBusy('Reading the words', b => scanOcr(st.pages, b)); if (!text) return;
+      if (!text.some(pg => pg.some(l => l.trim()))) { toast('No words could be read from these pages. Save as PDF instead, or retake the photo closer and sharper.', 'bad'); return; }
+      if (kind === 'xlsx') {
+        scanSheetEditor(text.map((pg, i) => ({ name: 'Page ' + (i + 1), rows: scanRows(pg) })), name, async sheets => {
           await need('xlsx'); const wb = XLSX.utils.book_new();
-          text.forEach((pg, pi) => { const rows = pg.filter(l => l.trim()).map(l => l.trim().split(/\s{2,}|\t+/).map(c => { const t = c.trim(), n = t.replace(/[£$€,]/g, ''); return /^-?\d+(\.\d+)?$/.test(n) && !/^0\d/.test(n) ? Number(n) : t; }));
-            const ws = XLSX.utils.aoa_to_sheet(rows.length ? rows : [['']]); ws['!cols'] = [{ wch: 34 }, { wch: 14 }, { wch: 14 }, { wch: 14 }]; XLSX.utils.book_append_sheet(wb, ws, 'Page ' + (pi + 1)); });
-          await saveFile(new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name + '.xlsx'); return;
-        }
+          sheets.forEach(s => { const rows = s.rows.filter(r => r.some(c => String(c).trim())).map(r => r.map(scanCell));
+            const ws = XLSX.utils.aoa_to_sheet(rows.length ? rows : [['']]); ws['!cols'] = [{ wch: 34 }, { wch: 14 }, { wch: 14 }, { wch: 14 }]; XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 31)); });
+          await saveFile(new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx', compression: true })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name + '.xlsx');
+        });
+        return;
+      }
+      scanTextEditor(text.map(pg => pg.join('\n').trim()), kind, async pages => {
+        if (kind === 'txt') { await saveFile(new Blob([pages.join('\n\n----------\n\n')], { type: 'text/plain' }), name + '.txt'); return; }
+        await need('docx'); const D = window.docx; const kids = [];
+        pages.forEach((t, pi) => { let para = [], first = true;
+          const flush = () => { if (para.length) { kids.push(new D.Paragraph({ children: [new D.TextRun(para.join(' ').replace(/\s+/g, ' '))], spacing: { after: 160 }, pageBreakBefore: pi > 0 && first })); first = false; para = []; } };
+          for (const l of t.split('\n')) { if (!l.trim()) flush(); else para.push(l.trim()); } flush(); });
+        const doc = new D.Document({ sections: [{ children: kids }] }); await saveFile(await D.Packer.toBlob(doc), name + '.docx');
       });
     } catch (e) { toast('Could not save: ' + (e && e.message || e), 'bad'); }
   }
@@ -3635,7 +3821,7 @@ tool({ id: 'organize-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'pages'
 tool({ id: 'merge-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'merge', name: 'Merge files', desc: 'PDF, Word, text, Excel and images into one, with any pages in any order', kw: 'merge combine join append pdf together word docx text excel images pages mix', accepts: ['pdf', 'image', 'word', 'text', 'sheet'], multi: true, mount: (v, d) => mountOrganize(v, d, 'merge') });
 tool({ id: 'split-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'split', name: 'Split PDF', desc: 'Pull out pages or cut a PDF into parts', kw: 'split extract separate pages cut divide', accepts: ['pdf'], mount: mountSplit });
 tool({ id: 'merge-word', cat: 'office', cls: 'c-doc', glyph: 'DOCX', icon: 'merge', name: 'Merge into Word', desc: 'Word, PDF, text, Excel and images into one editable .docx', kw: 'merge word docx combine join documents text editable', accepts: ['pdf', 'image', 'word', 'text', 'sheet'], multi: true, mount: (v, d) => mountOrganize(v, d, 'merge-word') });
-tool({ id: 'scan', cat: 'office', cls: 'c-img', glyph: 'SCAN', icon: 'image', name: 'Scan paper', desc: 'Use the camera to scan pages and save them as PDF, Word, Excel or text', kw: 'scan camera photo paper document receipt invoice pdf word excel text ocr phone', accepts: ['image'], multi: true, mount: mountScan });
+tool({ id: 'scan', cat: 'office', cls: 'c-img', glyph: 'SCAN', icon: 'image', name: 'Scan paper', desc: 'Snap page after page with the camera, crop and reorder, then save as one PDF, Word, Excel or text', kw: 'scan camera photo paper document receipt invoice pdf word excel text ocr phone', accepts: ['image'], multi: true, mount: mountScan });
 tool({ id: 'combine-images', cat: 'image', cls: 'c-img', glyph: 'IMG', icon: 'pages', name: 'Combine images', desc: 'Join photos side by side, stacked or in a grid, as one picture', kw: 'merge combine join stitch collage images photos side by side grid one picture', accepts: ['image'], multi: true, mount: mountCombine });
 tool({ id: 'edit-any', cat: 'office', cls: 'c-doc', glyph: 'EDIT', icon: 'edit', name: 'Edit any file', desc: 'Open a PDF, Word, text, spreadsheet or picture in the right editor', kw: 'edit open any file document pdf word text excel picture editor all in one', accepts: ['pdf', 'word', 'text', 'sheet', 'image'], mount: mountEditAny });
 tool({ id: 'rotate-pdf', cat: 'pdf', cls: 'c-pdf', glyph: 'PDF', icon: 'rotate', name: 'Rotate PDF', desc: 'Turn some or all pages the right way up', kw: 'rotate turn landscape portrait upside', accepts: ['pdf'], hidden: false, mount: (v, d) => mountOrganize(v, d, 'organize') });

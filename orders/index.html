@@ -37,6 +37,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .row .nm b{display:block}
 .row .nm small{color:var(--muted);display:block}
 .pic{width:64px;height:44px;border-radius:8px;object-fit:cover;background:var(--soft);border:1px solid var(--line);flex:none;cursor:zoom-in}
+.photobtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fl{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:600}.fl input,.fl select{font-weight:400;color:var(--ink)}
 .pic.none{display:grid;place-items:center;font-size:10px;color:var(--muted);cursor:default;text-align:center;line-height:1.1}
 .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-right:6px}
 .chk{display:block;margin-top:4px;font-size:12.5px;color:var(--warn);background:var(--warnbg);border-radius:7px;padding:3px 7px}
@@ -213,15 +215,63 @@ function filtered(list){const q=S.q.trim().toLowerCase();return list.filter(i=>(
 function byCat(list,rowFn){const out=[];let cur=null;for(const it of list){if(it.category!==cur){cur=it.category;out.push(h('div',{class:'cat'},cur))}out.push(rowFn(it))}return out}
 function searchBox(ph){return h('input',{type:'search',placeholder:ph||'Search by name or code…',value:S.q,style:{marginBottom:'10px'},oninput:e=>{S.q=e.target.value;const p=e.target.selectionStart;render();const i=document.querySelector('input[type=search]');if(i){i.focus();i.setSelectionRange(p,p)}}})}
 function pic(p){
-  return p.photo?h('img',{class:'pic',src:p.photo,alt:p.name,loading:'lazy',onclick:()=>showPhoto(p)}):h('div',{class:'pic none'},'no photo');
+  return p.photo?h('img',{class:'pic',src:p.photo,alt:p.name,loading:'lazy',onclick:()=>showPhoto(p)}):h('button',{class:'pic none',type:'button',title:'Add a photo',onclick:()=>showPhoto(p)},'+ photo');
+}
+/* the shop's own item behind a list line (catalogue lines become items the first time they are changed) */
+function itemOf(p){if(p.item)return p.item;if(p.id&&S.items.some(i=>i.id===p.id))return p;return null}
+async function ensureItem(p){
+  const it=itemOf(p);if(it)return it;const c=p.cat;
+  const n=await S.api.addItem({store_id:S.store,code:c.code,supplier:c.supplier||null,category:c.category,name:c.name,size:c.size||null,price:c.price??null,photo:c.photo||null,note:c.note||null,created_by:S.me.id});
+  S.items.push(n);return n;
+}
+/* phone photos are big: shrink to 480px and keep it inside the item (about 40 KB) */
+function shrinkPhoto(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{const k=Math.min(1,480/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',0.72))};
+  im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('That file is not a picture'))};im.src=u})}
+async function setPhoto(p,photo,m){
+  try{const it=await ensureItem(p);await S.api.updateItem(it.id,{photo});it.photo=photo;p.photo=photo;flash(photo?'Photo saved':'Photo removed');if(m)m.remove();render()}
+  catch(e){flash('Not saved: '+e.message)}
+}
+function photoPicker(p,m,capture){
+  const inp=h('input',{type:'file',accept:'image/*',capture:capture?'environment':null,style:{display:'none'},onchange:async e=>{const f=e.target.files[0];if(!f)return;
+    try{await setPhoto(p,await shrinkPhoto(f),m)}catch(er){flash(er.message)}}});
+  document.body.append(inp);inp.click();setTimeout(()=>inp.remove(),60000);
 }
 function showPhoto(p){
   const m=h('div',{class:'modal',onclick:e=>{if(e.target===m)m.remove()}},h('div',{class:'sheet',style:{textAlign:'center'}},
-    h('img',{class:'big',src:p.photo,alt:p.name}),h('p',null,p.code?h('span',{class:'code'},p.code):null,h('b',null,label(p))),
+    p.photo?h('img',{class:'big',src:p.photo,alt:p.name}):h('div',{class:'pic none',style:{width:'100%',height:'160px',fontSize:'14px'}},'No photo yet'),
+    h('p',null,p.code?h('span',{class:'code'},p.code):null,h('b',null,label(p))),
     p.note?h('span',{class:'chk'},'Check: '+p.note):null,
-    h('p',{class:'note',style:{marginTop:'8px'}},'Photo taken from the shelf. Compare it with the product and the shelf label before you add it.'),
-    h('button',{class:'btn alt',onclick:()=>m.remove()},'Close')));
+    h('div',{class:'photobtns'},
+      h('button',{class:'btn',id:'phTake',onclick:()=>photoPicker(p,m,true)},'Take a photo'),
+      h('button',{class:'btn alt',id:'phUpload',onclick:()=>photoPicker(p,m,false)},'Upload a photo'),
+      p.photo?h('button',{class:'btn alt',id:'phRemove',onclick:()=>{if(confirm('Remove this photo?'))setPhoto(p,null,m)}},'Remove photo'):null),
+    itemOf(p)||p.cat?h('button',{class:'btn alt',id:'phEdit',style:{marginTop:'8px'},onclick:async()=>{m.remove();try{editItem(await ensureItem(p))}catch(e){flash(e.message)}}},'Edit details & stock'):null,
+    h('div',{style:{marginTop:'8px'}},h('button',{class:'btn alt',onclick:()=>m.remove()},'Close'))));
   document.body.append(m);
+}
+/* change anything about an item: name, size, code, price, category, stock, levels */
+function editItem(it){
+  const f=(id,lab,val,type,extra)=>h('label',{class:'fl'},lab,h('input',{id,type:type||'text',value:val==null?'':val,...(extra||{})}));
+  const cat=h('select',{id:'eiCat'},[...new Set([...CATS,it.category])].map(c=>h('option',{value:c,selected:c===it.category},c)));
+  const m=h('div',{class:'modal',onclick:e=>{if(e.target===m)m.remove()}},h('div',{class:'sheet'},
+    h('h2',{style:{marginTop:0}},'Edit '+label(it)),
+    h('div',{class:'grid2'},f('eiName','Name',it.name),f('eiSize','Size',it.size),f('eiCode','Code',it.code),f('eiPrice','Price £',it.price,'number',{step:'0.01',min:'0'}),
+      h('label',{class:'fl'},'Category',cat),f('eiStock','Stock now',it.current_stock,'number',{min:'0',step:'1'}),
+      f('eiMin','Minimum',it.min_qty,'number',{min:'0'}),f('eiOrd','Order amount',it.order_qty,'number',{min:'0'})),
+    h('div',{class:'photobtns',style:{marginTop:'12px'}},
+      h('button',{class:'btn',id:'eiSave',onclick:async ev=>{
+        const v=id=>m.querySelector('#'+id).value.trim(),num=id=>v(id)===''?null:Number(v(id));
+        if(!v('eiName'))return flash('Give it a name');
+        const patch={name:v('eiName'),size:v('eiSize')||null,code:v('eiCode')||null,price:num('eiPrice'),category:cat.value,min_qty:num('eiMin'),order_qty:num('eiOrd')};
+        const st=num('eiStock');ev.target.disabled=true;
+        try{await S.api.updateItem(it.id,patch);Object.assign(it,patch);
+          if(st!==(it.current_stock==null?null:Number(it.current_stock))&&st!=null&&st>=0){await S.api.setStock(it.id,st);it.current_stock=st;it.stock_updated_at=new Date().toISOString()}
+          flash('Saved');m.remove();render()}catch(e){ev.target.disabled=false;flash('Not saved: '+e.message)}}},'Save'),
+      h('button',{class:'btn alt',onclick:()=>{m.remove();showPhoto(it)}},'Photo'),
+      h('button',{class:'btn alt',onclick:()=>m.remove()},'Cancel'))));
+  document.body.append(m);setTimeout(()=>m.querySelector('#eiName').focus(),50);
 }
 
 function viewNeed(){
@@ -298,7 +348,7 @@ function viewStock(){
     h('p',{class:'note'},'Type how many are on the shelf and in the back. If an item drops to its minimum and is on auto-order, it goes onto the manager’s order by itself.'),
     searchBox(),catChips(S.items),
     list.length?byCat(list,it=>h('div',{class:'row'},pic(it),
-      h('div',{class:'nm'},h('b',null,it.code?h('span',{class:'code'},it.code):null,label(it)),h('small',null,it.stock_updated_at?('Counted '+when(it.stock_updated_at)):'Not counted yet',it.min_qty!=null?' · minimum '+fmt(it.min_qty):'')),
+      h('div',{class:'nm',style:{cursor:'pointer'},title:'Edit',onclick:()=>editItem(it)},h('b',null,it.code?h('span',{class:'code'},it.code):null,label(it)),h('small',null,it.stock_updated_at?('Counted '+when(it.stock_updated_at)):'Not counted yet',it.min_qty!=null?' · minimum '+fmt(it.min_qty):'')),
       isLow(it)?h('span',{class:'tag low'},'Low'):(it.current_stock!=null&&it.min_qty!=null?h('span',{class:'tag ok'},'OK'):null),
       h('input',{type:'number',class:'num',min:'0',step:'1',inputmode:'numeric','aria-label':'Stock of '+label(it),value:it.current_stock==null?'':it.current_stock,
         onchange:async e=>{const v=e.target.value.trim();if(v===''||Number(v)<0)return;try{await S.api.setStock(it.id,Number(v));it.current_stock=Number(v);it.stock_updated_at=new Date().toISOString();flash('Saved');render()}catch(er){flash('Not saved: '+er.message)}}})
@@ -402,17 +452,19 @@ function viewItems(){
     h('p',{class:'note'},'Minimum = the stock level where it needs ordering. Order amount = how many to order then. Switch Auto on and it puts itself on your order when a stock count hits the minimum.'),
     searchBox(),catChips(S.items),
     list.length?h('div',{style:{overflowX:'auto'}},h('table',null,
-      h('thead',null,h('tr',null,h('th',null,'Item'),h('th',null,'Category'),h('th',{class:'r'},'Stock'),h('th',{class:'r'},'Minimum'),h('th',{class:'r'},'Order amount'),h('th',null,'Auto'),h('th',null,''))),
+      h('thead',null,h('tr',null,h('th',null,''),h('th',null,'Item'),h('th',null,'Category'),h('th',{class:'r'},'Stock'),h('th',{class:'r'},'Minimum'),h('th',{class:'r'},'Order amount'),h('th',null,'Auto'),h('th',null,''))),
       h('tbody',null,list.map(it=>{
         const save=(field,conv)=>async e=>{let v=e.target.type==='checkbox'?e.target.checked:e.target.value.trim();if(conv)v=v===''?null:Number(v);try{await S.api.updateItem(it.id,{[field]:v});it[field]=v;flash('Saved');render()}catch(er){flash('Not saved: '+er.message)}};
-        return h('tr',null,
+        return h('tr',{'data-item':it.id},
+          h('td',null,pic(it)),
           h('td',null,h('b',null,it.code?h('span',{class:'code'},it.code):null,label(it)),isLow(it)?h('span',{class:'tag low',style:{marginLeft:'6px'}},'Low'):null),
           h('td',null,h('select',{class:'f',style:{padding:'7px',minWidth:'120px'},'aria-label':'Category of '+label(it),onchange:save('category')},[...new Set([...CATS,it.category])].map(c=>h('option',{value:c,selected:c===it.category},c)))),
-          h('td',{class:'r'},it.current_stock==null?'—':fmt(it.current_stock)),
+          h('td',{class:'r'},h('input',{type:'number',class:'num',min:'0',step:'1','data-f':'stock','aria-label':'Stock of '+label(it),value:it.current_stock==null?'':it.current_stock,
+            onchange:async e=>{const v=e.target.value.trim();if(v===''||Number(v)<0)return;try{await S.api.setStock(it.id,Number(v));it.current_stock=Number(v);it.stock_updated_at=new Date().toISOString();flash('Saved');render()}catch(er){flash('Not saved: '+er.message)}}})),
           h('td',{class:'r'},h('input',{type:'number',class:'num',min:'0','aria-label':'Minimum for '+label(it),value:it.min_qty==null?'':it.min_qty,onchange:save('min_qty',true)})),
           h('td',{class:'r'},h('input',{type:'number',class:'num',min:'0','aria-label':'Order amount for '+label(it),value:it.order_qty==null?'':it.order_qty,onchange:save('order_qty',true)})),
           h('td',null,h('input',{type:'checkbox','aria-label':'Auto-order '+label(it),checked:it.auto_order,style:{width:'20px',height:'20px'},onchange:save('auto_order')})),
-          h('td',null,h('button',{class:'btn alt sm',title:'Remove from the list',onclick:async()=>{if(!confirm('Remove '+label(it)+' from the list?'))return;try{await S.api.updateItem(it.id,{active:false});flash('Removed');await reload()}catch(er){flash('Not removed: '+er.message)}}},'Remove')));
+          h('td',null,h('button',{class:'btn alt sm','data-act':'edit',onclick:()=>editItem(it)},'Edit'),' ',h('button',{class:'btn alt sm',title:'Remove from the list',onclick:async()=>{if(!confirm('Remove '+label(it)+' from the list?'))return;try{await S.api.updateItem(it.id,{active:false});flash('Removed');await reload()}catch(er){flash('Not removed: '+er.message)}}},'Remove')));
       })))):h('div',{class:'empty'},'Products appear here once staff add or order them.'));
 }
 

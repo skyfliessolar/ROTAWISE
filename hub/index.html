@@ -133,6 +133,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .segbtns{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
 .segbtns button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px}
 .segbtns button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.banner{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}.banner span{flex:1 1 220px}
 </style>
 </head>
 <body>
@@ -148,6 +149,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
     <div id="shopErr" class="err hidden"></div>
     <button class="btn alt" id="newShopBtn" type="button">+ Create a new shop</button>
     <button class="linkbtn" id="personalBtn" type="button">Staff or admin? Sign in with your own login</button>
+    <button class="linkbtn" id="homeBtn" type="button">‹ Back to the free apps</button>
   </div>
 </section>
 
@@ -180,6 +182,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
   <div class="wrap">
     <div id="home">
       <div class="hello" id="hello"></div>
+      <div class="banner hidden" id="banner"></div>
       <div class="grid" id="tiles"></div>
       <div class="empty hidden" id="noapps">No apps have been shared with you yet. Ask your manager to grant access.</div>
     </div>
@@ -229,7 +232,7 @@ async function makeFirebaseApi(){
   const toMe = w => {
     if(!w) return null;
     if(w.kind==='off') return { off:true };
-    if(w.kind==='shop') return { id:w.uid, is_shop:true, is_manager:true, shopId:w.shopId, shopName:w.name, shopAccess:w.access, name:w.name, apps:{ rota:1, gas:1, cash:1, orders:1, docs:1 } };
+    if(w.kind==='shop') return { id:w.uid, is_shop:true, is_manager:true, shopId:w.shopId, shopName:w.name, shopAccess:w.access, shopHidden:w.hidden, name:w.name, apps:{ rota:1, gas:1, cash:1, orders:1, docs:1 } };
     if(w.kind==='admin') return { id:w.uid, is_admin:true, is_manager:true, name:'Admin', employee_code:'admin', email:w.email };
     const apps={}; for(const a of APPS) apps[a.key] = w.apps && a.key in w.apps ? !!w.apps[a.key] : DEFAULT_ON[a.key];
     return { id:w.uid, name:w.name, employee_code:w.code, is_admin:w.admin, is_manager:w.manager, role:w.role, apps };
@@ -278,11 +281,11 @@ const lsSet=(k,v)=>{ try{ v==null?localStorage.removeItem(k):localStorage.setIte
 const lsGet=k=>{ try{ return localStorage.getItem(k); }catch(e){ return null; } };
 
 /* which apps can this person open */
-function srcFor(a){ return state.me && state.me.is_shop ? a.shopSrc : a.src; }
+function srcFor(a){ return state.me && (state.me.is_shop || state.me.guest) ? a.shopSrc : a.src; }
 function allowed(key){
   const me = state.me; if(!me) return false;
   const a = APPS.find(x=>x.key===key); if(!a || !srcFor(a)) return false;
-  if(me.is_admin || me.is_shop) return true;
+  if(me.is_admin || me.is_shop || me.guest) return true;
   const mode = state.access[key] || 'assigned';
   if(mode==='off') return false;
   if(mode==='free') return true;
@@ -297,13 +300,19 @@ function show(view){
 function renderHome(){
   $('#admin').classList.add('hidden'); $('#home').classList.remove('hidden');
   const me = state.me;
-  $('#whoBadge').textContent = me.is_shop ? (me.shopAccess==='password' ? 'Shop · password' : 'Shop · open') : me.is_admin ? 'Admin' : (me.is_manager ? 'Manager' : 'Staff');
-  $('#logoutBtn').title = me.is_shop ? 'Switch shop' : 'Sign out';
+  $('#whoBadge').textContent = me.guest ? 'Free' : me.is_shop ? (me.shopAccess==='password' ? 'Shop · password' : 'Shop · open') : me.is_admin ? 'Admin' : (me.is_manager ? 'Manager' : 'Staff');
+  $('#logoutBtn').title = me.guest ? 'Pick a shop or sign in' : me.is_shop ? 'Switch shop' : 'Sign out';
   $('#adminBtn').title = me.is_shop ? 'Shop settings: name & password' : 'Admin: shops, people & access';
   $('#adminBtn').classList.toggle('hidden', !(me.is_admin || me.is_shop));
-  $('#hello').innerHTML = (me.is_shop ? esc(me.shopName) : 'Hi, '+esc(String(me.name||'').split(' ')[0]||me.employee_code)+'.')
+  $('#hello').innerHTML = (me.guest ? 'Welcome to Rotawise' : me.is_shop ? esc(me.shopName) : 'Hi, '+esc(String(me.name||'').split(' ')[0]||me.employee_code)+'.')
     + '<small>'+esc(hint())+'</small>';
   const tiles = $('#tiles'); tiles.innerHTML='';
+  const bn = $('#banner'); bn.replaceChildren(); bn.classList.add('hidden');
+  if(me.guest){ bn.classList.remove('hidden'); bn.append(h('span',null,'Already have a shop, or a staff login?'), h('button',{ class:'mbtn', id:'bnPick', onclick:()=>showShops(false) }, 'Pick a shop'), h('button',{ class:'mbtn', id:'bnLogin', onclick:()=>$('#personalBtn').click() }, 'Sign in')); }
+  else if(me.is_shop && (me.shopHidden || me.shopAccess==='open')){ bn.classList.remove('hidden');
+    bn.append(h('span',null, me.shopHidden ? 'Your data is saved here. Give your shop a name so you can find it again, and add a password whenever you want to keep it private.' : 'Anyone with the link can open this shop. Add a password when you want to keep it private.'),
+      me.shopHidden ? h('button',{ class:'mbtn', id:'bnName', onclick:renameMine }, 'Name my shop') : null,
+      h('button',{ class:'mbtn', id:'bnPw', onclick:setMyPw }, 'Add a password')); }
   let shown = 0;
   for(const a of APPS){
     const can = allowed(a.key), soon = !srcFor(a);
@@ -322,19 +331,42 @@ function renderHome(){
 }
 function hint(){
   const me = state.me;
+  if(me.guest) return 'Everything is free. Tap an app and start: no sign-up, no password.';
   if(me.is_shop) return me.shopAccess==='password' ? 'Only people with the shop password can open this shop. Tap ⚙ to change it.' : 'Anyone with the link can open this shop. Tap ⚙ to add a password.';
   if(me.is_admin) return 'You see every shop. Use ⚙ for shops, passwords and who can open what.';
   return APPS.some(a=>allowed(a.key)) ? 'Tap an app to open it.' : '';
 }
 function svg(inner){ return '<svg width="24" height="24" viewBox="0 0 24 24">'+inner+'</svg>'; }
 
-function openApp(a){
+async function openApp(a){
+  if(state.me && state.me.guest && a.key!=='docs'){ if(!await makeFreeSpace()) return; }
   $('#frameTitle').textContent = a.title;
   $('#frameApp').src = srcFor(a);
   show('frame');
   location.hash = a.key;
 }
 $('#frameBack').onclick = ()=>{ $('#frameApp').src='about:blank'; history.replaceState(null,'',location.pathname); show('shell'); renderHome(); };
+
+/* a free, unnamed shop made the moment a visitor opens an app that saves data */
+async function makeFreeSpace(){
+  flash('Setting up your free space…');
+  for(let i=0;i<3;i++){
+    try{
+      const r = await state.api.createShop('My shop '+String(Math.floor(1000+Math.random()*9000)), undefined, { hidden:true });
+      lsSet('rw_shop', r.id); const me = await state.api.whoami(); if(me && me.is_shop){ state.me = me; state.access = {}; return true; }
+    }catch(e){ if(!/already a shop/.test(e.message)){ flash('Couldn’t start: '+e.message); return false; } }
+  }
+  flash('Couldn’t start. Try again.'); return false;
+}
+async function renameMine(){
+  const me=state.me; const v = await askText('Name your shop', 'This is the name in the shop list.', 'Shop name', 'text', me.shopHidden?'':me.shopName); if(!v) return;
+  try{ await state.api.renameShop(me.shopId, v); me.shopName=v; me.name=v; me.shopHidden=false; flash('Saved'); renderHome(); }catch(e){ flash(e.message); }
+}
+async function setMyPw(){
+  const me=state.me; const v = await askText('Add a shop password', 'At least 4 characters. Staff type it once on each phone. Your admin can always see it.', 'Shop password'); if(v==null) return;
+  if(v.length<4){ flash('At least 4 characters'); return; }
+  try{ await state.api.setShopAccess(me.shopId,'password',v); me.shopAccess='password'; flash('Password set'); renderHome(); }catch(e){ flash('Not saved: '+e.message); }
+}
 
 /* ============================================================= small dialogs */
 function askText(title, note, ph, type, value){
@@ -366,7 +398,6 @@ async function showShops(auto){
   const box=$('#shopList'); box.innerHTML='<div class="spin" style="margin:10px auto"></div>';
   let list=[]; try{ list = await state.api.shops(); }catch(e){ box.textContent=''; shopErr('Couldn’t load the shops. Check your connection.'); return; }
   const last=lsGet('rw_shop');
-  if(auto && last){ const sh=list.find(x=>x.id===last); if(sh && sh.access==='open'){ await enterShop(sh, true); return; } }
   const tag={ open:['Open','open'], password:['Password',''] };
   box.replaceChildren(...(list.length?list.map(sh=>h('button',{ class:'shopbtn', 'data-shop':sh.id, onclick:()=>enterShop(sh) }, sh.name, h('span',{ class:'st '+(tag[sh.access]||tag.password)[1] }, (tag[sh.access]||tag.password)[0]))):
     [h('div',{ class:'shoplist-empty' }, 'No shops yet. Create the first one.')]));
@@ -412,6 +443,7 @@ function createShopSheet(fromAdmin){
 $('#newShopBtn').onclick = async ()=>{ const r = await createShopSheet(false); if(!r) return; lsSet('rw_shop', r.id); flash(r.name+' is ready'); await loadProfileAndRender(); };
 $('#personalBtn').onclick = ()=>{ show('login'); $('#loginErr').classList.add('hidden'); setTimeout(()=>$('#code').focus(),50); };
 $('#toShops').onclick = ()=> showShops(false);
+$('#homeBtn').onclick = ()=>{ state.me = { guest:true }; state.access={}; show('shell'); renderHome(); };
 
 /* ============================================================= shop settings (the shop itself) */
 async function shopSettings(){
@@ -512,7 +544,12 @@ async function renderPeople(){
 /* ============================================================= sign-in + boot */
 async function loadProfileAndRender(auto){
   const me = await state.api.whoami();
-  if(!me){ await showShops(auto); return; }
+  if(!me){
+    if(auto){ const last=lsGet('rw_shop'); if(last){ try{ const list=await state.api.shops(); const sh=list.find(x=>x.id===last);
+      if(sh && sh.access==='open'){ await enterShop(sh, true); return; } }catch(e){} }
+      // a remembered free shop that is still unnamed is not in the public list: go back into it directly
+      if(last){ const r=await state.api.enterShop(last); if(r && r.ok){ const m2=await state.api.whoami(); if(m2){ state.me=m2; state.access={}; show('shell'); routeHash(); return; } } } }
+    state.me = { guest:true }; state.access = {}; show('shell'); routeHash(); return; }
   if(me.off){ await state.api.signOut(); show('login'); $('#loginErr').textContent='This login is switched off. Ask your manager.'; $('#loginErr').classList.remove('hidden'); return; }
   state.me = me;
   if(me.is_shop) lsSet('rw_shop', me.shopId);
@@ -540,7 +577,7 @@ $('#loginForm').addEventListener('submit', async (e)=>{
   lsSet('rw_shop', null);
   await loadProfileAndRender();
 });
-$('#logoutBtn').onclick = async ()=>{ try{ sessionStorage.removeItem('rw_sso'); }catch(e){} lsSet('rw_shop', null); await state.api.signOut(); state.me=null; location.hash=''; $('#pin').value=''; await showShops(false); };
+$('#logoutBtn').onclick = async ()=>{ if(state.me && state.me.guest){ await showShops(false); return; } try{ sessionStorage.removeItem('rw_sso'); }catch(e){} lsSet('rw_shop', null); await state.api.signOut(); state.me=null; location.hash=''; $('#pin').value=''; await showShops(false); };
 $('#themeBtn').onclick = flipTheme;
 $('#adminBtn').onclick = ()=> openAdmin();
 window.addEventListener('hashchange', ()=>{ if(!$('#shell').classList.contains('hidden') && state.me) routeHash(); });

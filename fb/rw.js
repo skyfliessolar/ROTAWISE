@@ -64,7 +64,7 @@ export async function whoami() {
   if (sid) {
     const s = await F.getDoc(F.doc(db, 'hub_shops', sid));
     if (!s.exists()) return null;
-    return { kind: 'shop', uid: u.uid, shopId: sid, space: sid, name: s.data().name, access: s.data().access, admin: false, manager: true, role: 'shop' };
+    return { kind: 'shop', uid: u.uid, shopId: sid, space: sid, name: s.data().name, access: s.data().access, hidden: !!s.data().hidden, admin: false, manager: true, role: 'shop' };
   }
   if (u.uid === OWNER_UID) return { kind: 'admin', uid: u.uid, space: 'main', name: 'Admin', email: u.email, admin: true, manager: true, role: 'admin', stores: [] };
   const d = await F.getDoc(F.doc(db, 'gas_staff', u.uid));
@@ -106,7 +106,7 @@ export async function enterShop(id, typed) {
   catch (e) { return { error: friendly(e) }; }
   return { ok: true };
 }
-export async function createShop(name, password, { keepSession } = {}) {
+export async function createShop(name, password, { keepSession, hidden } = {}) {
   const { F, Au, db, auth } = await fb();
   name = cleanName(name);
   if (name.length < 2 || name.length > 60) throw new Error('Give the shop a name (2 to 60 letters).');
@@ -117,7 +117,7 @@ export async function createShop(name, password, { keepSession } = {}) {
   const make = async (a, d) => {
     await Au.createUserWithEmailAndPassword(a, shopEmail(id), authPw(raw));
     await F.setDoc(F.doc(d, 'hub_keys', id), { pw: raw, updatedAt: now });
-    await F.setDoc(F.doc(d, 'hub_shops', id), { name, nameLower: name.toLowerCase(), access: password ? 'password' : 'open', createdAt: now, updatedAt: now });
+    await F.setDoc(F.doc(d, 'hub_shops', id), { name, nameLower: name.toLowerCase(), access: password ? 'password' : 'open', createdAt: now, updatedAt: now, ...(hidden ? { hidden: true } : {}) });
   };
   if (keepSession) await side(make);
   else { if (auth.currentUser) await Au.signOut(auth); await make(auth, db); }
@@ -142,7 +142,9 @@ export async function setShopAccess(id, mode, password) {
 export async function renameShop(id, name) {
   const { F, db } = await fb(); name = cleanName(name);
   if (name.length < 2 || name.length > 60) throw new Error('Give the shop a name (2 to 60 letters).');
-  await F.updateDoc(F.doc(db, 'hub_shops', id), { name, nameLower: name.toLowerCase(), updatedAt: Date.now() });
+  const same = await F.getDocs(F.query(F.collection(db, 'hub_shops'), F.where('nameLower', '==', name.toLowerCase())));
+  if (same.docs.some(d => d.id !== id)) throw new Error('There is already a shop with that name. Pick another name.');
+  await F.updateDoc(F.doc(db, 'hub_shops', id), { name, nameLower: name.toLowerCase(), hidden: false, updatedAt: Date.now() });
 }
 export async function hideShop(id, hidden) { const { F, db } = await fb(); await F.updateDoc(F.doc(db, 'hub_shops', id), { hidden: !!hidden, updatedAt: Date.now() }); }
 /* admin: every shop with its password */
