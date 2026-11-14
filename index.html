@@ -13,7 +13,26 @@
     </style>
     <script type="module" crossorigin src="./assets/app.js?v=hub1"></script>
     <link rel="stylesheet" crossorigin href="./assets/index.css">
-  </head>
+  <script>
+/* Opened from the Rotawise hub: sign in by itself with the same code + PIN (shop login or personal) used there. */
+(function(){
+  if (window.parent === window) return;
+  try { if (window.parent.location.origin !== location.origin) return; } catch (e) { return; }
+  var j = null; try { j = JSON.parse(sessionStorage.getItem('rw_sso') || 'null'); } catch (e) {}
+  if (!j || !j.code || !j.pin || Date.now() - (j.t || 0) > 12 * 3600e3) return;
+  var tries = 0, iv = setInterval(function(){
+    var f = document.querySelector('form'), ins = f && f.querySelectorAll('input');
+    if (ins && ins.length >= 2 && !f.dataset.rwAuto) {
+      f.dataset.rwAuto = '1'; clearInterval(iv);
+      var set = function(el, v){ Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })); };
+      set(ins[0], j.code); set(ins[1], j.pin);
+      var b = f.querySelector('button[type=submit]'); if (b) b.click();
+    }
+    if (++tries > 150) clearInterval(iv);
+  }, 100);
+})();
+</script>
+</head>
   <body>
     <div id="root"></div>
     <script>

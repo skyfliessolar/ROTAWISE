@@ -719,7 +719,7 @@ async function boot(){
 /* One login for everyone: a login ID (employee code) and PIN. The owner types their email in the same box. */
 /* Opened inside Rotawise: sign in by itself with the same login code and PIN the person just used there. */
 async function trySso(){
-  let j=null;try{j=JSON.parse(sessionStorage.getItem('rw_sso')||'null');sessionStorage.removeItem('rw_sso')}catch(e){}
+  let j=null;try{j=JSON.parse(sessionStorage.getItem('rw_sso')||'null')}catch(e){}
   if(!j||!j.code||!j.pin||Date.now()-(j.t||0)>12*3600e3||!document.documentElement.classList.contains('embed'))return false;
   try{
     const code=normCode(j.code),pin=String(j.pin).trim();
