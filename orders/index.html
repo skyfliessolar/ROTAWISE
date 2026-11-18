@@ -119,30 +119,35 @@ const when=iso=>{const d=new Date(iso);return d.toLocaleDateString('en-GB',{day:
 async function makeApi(){
   const rw=await import('/fb/rw.js');
   const w=await rw.whoami(); if(!w||w.kind==='off')return {me:async()=>null};
-  const sp=await rw.space(w.space), now=()=>new Date().toISOString();
+  // the admin, or a manager the admin assigned, opening a free shop from Rotawise: …/orders/?space=<shop>
+  const want=new URLSearchParams(location.search).get('space');let visit=null;
+  if(want&&want!==w.space&&/^[a-z0-9]{6,30}$/.test(want)&&(w.kind==='admin'||w.kind==='staff')){visit=await rw.getShop(want);if(!visit)throw new Error('That shop does not exist any more')}
+  const sp=await rw.space(visit?visit.id:w.space), now=()=>new Date().toISOString();
+  const saved=()=>{try{if(parent!==window)parent.postMessage({rw:'saved'},location.origin)}catch(e){}};
   const byNew=(a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''));
   const mine=async(c,store)=>(await sp.where(c,'store_id',store));
   const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined)r[k]=o[k];return r};
   return {
     async me(){
+      if(visit)return {id:w.uid,name:w.name,employee_code:w.code||'admin',is_admin:w.admin,is_manager:true,store_id:'main',visiting:true,shopName:visit.name};
       if(w.kind==='shop')return {id:w.uid,name:'',employee_code:'shop',shared:true,is_manager:true,store_id:'main',shopName:w.name};
       if(w.kind==='admin')return {id:w.uid,name:'Admin',employee_code:'admin',is_admin:true,is_manager:true,allStores:true};
       return {id:w.uid,name:w.name,employee_code:w.code,is_manager:w.manager,is_admin:w.admin,store_id:w.stores[0]||null,extraStores:w.stores,allStores:!w.stores.length};
     },
-    async stores(){return w.kind==='shop'?[{id:'main',name:w.name}]:await rw.businessStores()},
+    async stores(){return visit?[{id:'main',name:visit.name}]:w.kind==='shop'?[{id:'main',name:w.name}]:await rw.businessStores()},
     async catalog(){const r=await fetch('catalog/gadjet.json',{cache:'no-cache'});return r.ok?(await r.json()).filter(x=>x.active!==false):[]},
     async items(store){return (await mine('go_items',store)).filter(x=>x.active!==false).sort((a,b)=>String(a.category).localeCompare(String(b.category))||String(a.name).localeCompare(String(b.name)))},
     async openRequests(store){return (await mine('go_requests',store)).filter(x=>x.status==='open').sort((a,b)=>-byNew(a,b))},
     async submissions(store){return (await mine('go_submissions',store)).filter(x=>x.status==='new'||x.status==='seen').sort(byNew)},
-    async addItem(row){const o=strip({...row,active:true,current_stock:row.current_stock??null,created_at:now()});return await sp.add('go_items',o)},
+    async addItem(row){const o=strip({...row,active:true,current_stock:row.current_stock??null,created_at:now()});const r=await sp.add('go_items',o);saved();return r},
     async updateItem(id,patch){await sp.patch('go_items',id,strip(patch))},
     async submit(sub,lines){
       const bt=sp.batch(),sref=sp.newRef('go_submissions'),t=now();
       bt.set(sref,strip({...sub,created_at:t}));
       lines.forEach(l=>bt.set(sp.newRef('go_requests'),strip({store_id:sub.store_id,item_id:l.item_id,qty:l.qty,status:'open',requested_by:sub.submitted_by,requested_by_name:sub.submitted_by_name,submission_id:sref.id,created_at:t})));
-      await bt.commit();return {id:sref.id,...sub,created_at:t}},
+      await bt.commit();saved();return {id:sref.id,...sub,created_at:t}},
     async markSeen(id){await sp.patch('go_submissions',id,{status:'seen'})},
-    async setStock(item,qty){await sp.patch('go_items',item,{current_stock:qty,stock_updated_at:now()})},
+    async setStock(item,qty){await sp.patch('go_items',item,{current_stock:qty,stock_updated_at:now()});saved()},
     async createOrder(row,reqIds,subIds){
       const bt=sp.batch(),oref=sp.newRef('go_orders'),o=strip({...row,created_at:now()});
       bt.set(oref,o);reqIds.forEach(id=>bt.update(sp.ref('go_requests',id),{status:'ordered',order_id:oref.id}));
@@ -152,7 +157,7 @@ async function makeApi(){
     async getEmails(){const d=await sp.get('go_settings','email');return (d&&d.value)||{}},
     async setEmails(v){await sp.set('go_settings','email',{value:v})},
     async expiry(store){return (await mine('go_expiry',store))},
-    async addExpiry(row){return await sp.add('go_expiry',strip(row))},
+    async addExpiry(row){const r=await sp.add('go_expiry',strip(row));saved();return r},
     async updateExpiry(id,patch){await sp.patch('go_expiry',id,strip(patch))},
     async delExpiry(id){await sp.del('go_expiry',id)},
     async getExpCfg(){const d=await sp.get('go_settings','expiry');return (d&&d.value)||{}},
@@ -549,6 +554,8 @@ function expSheet(e){
   const mChk=h('input',{type:'checkbox',id:'expMonthOnly',checked:monthOnly});
   const rIn=h('input',{id:'expReduce',type:'datetime-local',value:e.reduce_at||''});
   const note=h('input',{id:'expNote',placeholder:'Shelf, aisle or anything else (optional)',value:e.note||''});
+  const shared=!!(S.me.shared||S.me.is_shop);let myName='';try{myName=localStorage.getItem('go_name')||''}catch(er){}
+  const who=shared&&isNew?h('input',{id:'expWho',placeholder:'Your name',value:myName,autocomplete:'name'}):null;
   const dateBox=h('div');
   const expiry=()=>monthOnly?(mIn.value?lastOfMonth(mIn.value):''):dIn.value;
   const sync=()=>{dateBox.replaceChildren(monthOnly?mIn:dIn);const x=expiry();if(x&&!reduceTouched)rIn.value=defReduce(x)};
@@ -570,15 +577,18 @@ function expSheet(e){
     h('label',{class:'chkrow'},mChk,' Only the month is on the pack (e.g. "BBE MAR 2027")'),
     h('label',{class:'fl'},'Reduce the price on',rIn,h('small',{style:{fontWeight:400}},expDays()+' days before it expires, unless you pick another date and time.')),
     h('label',{class:'fl'},'Note',note),
+    who?h('label',{class:'fl'},'Your name (so the manager knows who added it)',who):null,
     h('div',{class:'photobtns',style:{marginTop:'12px'}},
       h('button',{class:'btn',id:'expSave',onclick:async ev=>{
         const x=expiry(),n=name.value.trim();
+        if(who&&!who.value.trim())return flash('Type your name');
+        if(who){try{localStorage.setItem('go_name',who.value.trim())}catch(er){}}
         if(!n)return flash('Type the product');if(!x)return flash('Pick the expiry date');
         const it=S.items.find(i=>label(i).toLowerCase()===n.toLowerCase()),c=!it&&S.catalog.find(c=>(c.name+(c.size?' '+c.size:'')).toLowerCase()===n.toLowerCase());
         const row={store_id:S.store,name:n,qty:qty.value===''?null:Math.max(1,Math.round(Number(qty.value))),expiry:x,month_only:monthOnly,reduce_at:rIn.value||defReduce(x),note:note.value.trim()||null,
           photo:e.photo||(it&&it.photo)||(c&&c.photo)||null,item_id:it?it.id:null,code:(it&&it.code)||(c&&c.code)||null};
         ev.target.disabled=true;
-        try{if(isNew){row.status='open';row.created_at=new Date().toISOString();row.created_by=S.me.id;row.created_by_name=S.me.name||null;S.exp.push(await S.api.addExpiry(row))}
+        try{if(isNew){row.status='open';row.created_at=new Date().toISOString();row.created_by=S.me.id;row.created_by_name=(who&&who.value.trim())||S.me.name||null;S.exp.push(await S.api.addExpiry(row))}
           else{if(row.reduce_at!==e.reduce_at)row.mailed_reduce=null;if(row.expiry!==e.expiry)row.mailed_remove=null;await S.api.updateExpiry(e.id,row);Object.assign(S.exp.find(z=>z.id===e.id),row)}
           flash('Saved');m.remove();render()}catch(er){ev.target.disabled=false;flash('Not saved: '+er.message)}}},'Save'),
       !isNew?h('button',{class:'btn alt',id:'expDel',onclick:async()=>{if(!confirm('Delete this expiry date?'))return;try{await S.api.delExpiry(e.id);S.exp=S.exp.filter(z=>z.id!==e.id);m.remove();render()}catch(er){flash(er.message)}}},'Delete'):null,
@@ -658,6 +668,7 @@ function expiryAlert(){
     S.me=await S.api.me();
     if(!S.me){$('#tabs').replaceChildren();$('#main').replaceChildren(h('div',{class:'card'},h('h2',null,'Choose your shop first'),h('p',{class:'note'},'Goods Orders opens from Rotawise.'),h('a',{class:'btn',href:'../hub/',target:'_top',style:{display:'inline-block',textDecoration:'none'}},'Go to Rotawise')));return}
     S.stores=await S.api.stores();
+    if(S.me.visiting){const t=document.querySelector('.top h1');if(t)t.textContent='Goods Orders · '+S.me.shopName}
     const me=S.me, mine=new Set([me.store_id,...(me.extraStores||[]),...(me.managed||[])].filter(Boolean));
     let list=me.is_admin||me.allStores||me.shared?S.stores:S.stores.filter(s=>mine.has(s.id));
     if(!list.length){$('#main').replaceChildren(h('div',{class:'empty'},'No shop is linked to this login yet. Ask your admin.'));return}

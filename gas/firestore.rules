@@ -97,18 +97,22 @@ service cloud.firestore {
     function shopUser(s) { return s != 'main' && signedIn() && request.auth.token.email == ('shop-' + s + '@shops.rotawise.app'); }
     function validShop() {
       let d = request.resource.data;
-      return d.keys().hasOnly(['name', 'nameLower', 'access', 'createdAt', 'updatedAt', 'hidden'])
+      return d.keys().hasOnly(['name', 'nameLower', 'access', 'createdAt', 'updatedAt', 'hidden', 'managers'])
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 60
         && d.nameLower == d.name.lower() && d.access in ['open', 'password'];
     }
+    // staff logins the admin ticked as managers of this shop
+    function shopManager(s) { return isStaff() && request.auth.uid in get(/databases/$(database)/documents/hub_shops/$(s)).data.get('managers', []); }
     match /hub_shops/{s} {
       allow read: if true;
-      allow create: if shopUser(s) && validShop();
-      allow update: if (shopUser(s) || isAdmin()) && validShop();
+      allow create: if shopUser(s) && validShop() && !('managers' in request.resource.data);
+      // only the admin chooses the managers
+      allow update: if validShop() && (isAdmin() || (shopUser(s)
+        && request.resource.data.get('managers', []) == resource.data.get('managers', [])));
       allow delete: if isAdmin();
       // a shop's own data (Gas, Goods Orders, Rota, Cash...). 'main' is the business itself.
       match /{rest=**} {
-        allow read, write: if shopUser(s) || isAdmin() || (s == 'main' && isStaff());
+        allow read, write: if shopUser(s) || isAdmin() || (s == 'main' && isStaff()) || (s != 'main' && shopManager(s));
       }
     }
     match /hub_keys/{s} {

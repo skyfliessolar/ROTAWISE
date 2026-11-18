@@ -191,3 +191,24 @@ export async function businessStores() {
     return a.length ? a.map((x, i) => ({ id: x.id, name: x.name || ('Store ' + (i + 1)) })) : [{ id: 'main', name: 'Store 1' }]; }
   catch (e) { return [{ id: 'main', name: 'Store 1' }]; }
 }
+
+/* ---------- shops a manager looks after ----------
+   The admin ticks which staff logins manage which shops (hub_shops/<id>.managers). Those managers and the
+   admin open the shop's apps with their own login, no shop PIN needed. */
+export async function setShopManagers(id, uids) { const { F, db } = await fb(); await F.updateDoc(F.doc(db, 'hub_shops', id), { managers: uids, updatedAt: Date.now() }); }
+export async function myShops(w) {
+  const { F, db } = await fb();
+  if (!w || (w.kind !== 'admin' && w.kind !== 'staff')) return [];
+  const q = w.admin ? F.collection(db, 'hub_shops') : F.query(F.collection(db, 'hub_shops'), F.where('managers', 'array-contains', w.uid));
+  const s = await F.getDocs(q);
+  return s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.nameLower || '').localeCompare(b.nameLower || ''));
+}
+/* what needs doing about expiry dates in a shop: products to take off the shelf / to reduce */
+export async function expiryDue(shopId) {
+  const sp = await space(shopId);
+  const all = await sp.all('go_expiry'), d = new Date(), p = n => String(n).padStart(2, '0');
+  const today = d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()), now = today + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  const open = all.filter(e => e.status !== 'done' && !e.removed_at && e.expiry);
+  return { remove: open.filter(e => e.expiry <= today).length, reduce: open.filter(e => e.expiry > today && e.reduce_at && e.reduce_at <= now && !e.reduced_at).length, total: open.length };
+}
+export async function getShop(id) { const { F, db } = await fb(); const s = await F.getDoc(F.doc(db, 'hub_shops', id)); return s.exists() ? { id: s.id, ...s.data() } : null; }

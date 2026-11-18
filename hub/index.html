@@ -134,6 +134,10 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .segbtns button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px}
 .segbtns button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .banner{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}.banner span{flex:1 1 220px}
+.myshop{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}.ms-n{flex:1 1 220px;display:flex;flex-direction:column;gap:4px}.ms-n .note{display:flex;gap:6px;flex-wrap:wrap}.ms-b{display:flex;gap:6px;flex-wrap:wrap}
+.pill{font-size:12px;font-weight:700;border-radius:99px;padding:2px 8px}.pill.bad{background:#fde2e2;color:#a11}.pill.warn{background:#fff1d6;color:#8a5300}.pill.ok{background:var(--line);color:var(--muted)}
+.mgrlist{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto}.mgr{display:flex;align-items:center;gap:6px}.mgr small{color:var(--muted)}
+#myShops .panel{margin-top:16px}
 </style>
 </head>
 <body>
@@ -184,6 +188,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
       <div class="hello" id="hello"></div>
       <div class="banner hidden" id="banner"></div>
       <div class="grid" id="tiles"></div>
+      <div id="myShops"></div>
       <div class="empty hidden" id="noapps">No apps have been shared with you yet. Ask your manager to grant access.</div>
     </div>
     <div id="admin" class="hidden"></div>
@@ -246,7 +251,9 @@ async function makeFirebaseApi(){
     appModes: rw.appModes, setAppModes: rw.setAppModes,
     async staff(){ return (await rw.staffList()).map(x=>({ id:x.id, name:x.name||x.code, employee_code:x.code, role:x.role||'staff', active:x.active===true,
       apps:Object.fromEntries(APPS.map(a=>[a.key, x.apps && a.key in x.apps ? !!x.apps[a.key] : DEFAULT_ON[a.key]])) })); },
-    setStaffApps: rw.setStaffApps
+    setStaffApps: rw.setStaffApps,
+    setShopManagers: rw.setShopManagers, expiryDue: rw.expiryDue,
+    async myShops(){ return rw.myShops(await rw.whoami()); }
   };
 }
 
@@ -312,7 +319,7 @@ function renderHome(){
   else if(me.is_shop && (me.shopHidden || me.shopAccess==='open')){ bn.classList.remove('hidden');
     bn.append(h('span',null, me.shopHidden ? 'Your data is saved here. Give your shop a name so you can find it again, and add a password whenever you want to keep it private.' : 'Anyone with the link can open this shop. Add a password when you want to keep it private.'),
       me.shopHidden ? h('button',{ class:'mbtn', id:'bnName', onclick:renameMine }, 'Name my shop') : null,
-      h('button',{ class:'mbtn', id:'bnPw', onclick:setMyPw }, 'Add a password')); }
+      h('button',{ class:'mbtn', id:'bnPw', onclick:setMyPw }, 'Set a shop PIN')); }
   let shown = 0;
   for(const a of APPS){
     const can = allowed(a.key), soon = !srcFor(a);
@@ -328,6 +335,25 @@ function renderHome(){
     tiles.appendChild(t);
   }
   $('#noapps').classList.toggle('hidden', shown>0);
+  renderMyShops();
+}
+/* the admin sees every free shop, a manager the shops the admin gave them; each with what is due on expiry */
+async function renderMyShops(){
+  const box=$('#myShops'); box.replaceChildren(); const me=state.me;
+  if(!me || me.is_shop || me.guest || !state.api.myShops || !(me.is_admin || me.is_manager)) return;
+  let list=[]; try{ list=(await state.api.myShops()).filter(s=>!s.hidden || me.is_admin); }catch(e){ return; }
+  if(!list.length) return;
+  const rows=list.map(sh=>{
+    const due=h('span',{ class:'note', style:{ margin:0 } },'…');
+    state.api.expiryDue(sh.id).then(d=>{ due.replaceChildren(...[
+      d.remove?h('span',{ class:'pill bad' }, d.remove+' to take off the shelf'):null,
+      d.reduce?h('span',{ class:'pill warn' }, d.reduce+' to reduce'):null,
+      !d.remove&&!d.reduce?h('span',{ class:'pill ok' }, d.total?d.total+' expiry dates, nothing due':'No expiry dates yet'):null].filter(Boolean)); }).catch(()=>{ due.textContent=''; });
+    const go=k=>{ const a=APPS.find(x=>x.key===k); state.visit=sh; openApp(a); };
+    return h('div',{ class:'myshop', 'data-myshop':sh.id }, h('div',{ class:'ms-n' }, h('b',null,sh.name), due),
+      h('div',{ class:'ms-b' }, h('button',{ class:'mbtn', 'data-go':'orders', onclick:()=>go('orders') }, 'Goods Orders & expiry'), h('button',{ class:'mbtn', 'data-go':'gas', onclick:()=>go('gas') }, 'Gas')));
+  });
+  box.replaceChildren(h('div',{ class:'panel' }, h('h2',null, me.is_admin?'All shops':'Your shops'), h('p',{ class:'note' },'Open any of these shops with your own login. No shop PIN needed.'), rows));
 }
 function hint(){
   const me = state.me;
@@ -340,12 +366,36 @@ function svg(inner){ return '<svg width="24" height="24" viewBox="0 0 24 24">'+i
 
 async function openApp(a){
   if(state.me && state.me.guest && a.key!=='docs'){ if(!await makeFreeSpace()) return; }
-  $('#frameTitle').textContent = a.title;
-  $('#frameApp').src = srcFor(a);
+  const v=state.visit; state.visit=null;
+  $('#frameTitle').textContent = a.title + (v ? ' · '+v.name : '');
+  $('#frameApp').src = v ? a.shopSrc+'?space='+encodeURIComponent(v.id) : srcFor(a);
   show('frame');
   location.hash = a.key;
 }
-$('#frameBack').onclick = ()=>{ $('#frameApp').src='about:blank'; history.replaceState(null,'',location.pathname); show('shell'); renderHome(); };
+$('#frameBack').onclick = ()=>{ $('#frameApp').src='about:blank'; history.replaceState(null,'',location.pathname); show('shell'); renderHome(); if(state.savedSomething) askForPin(); };
+/* the apps tell the hub when they saved something; an open shop then gets asked for its PIN */
+window.addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.rw==='saved'){ state.savedSomething=true; if(!$('#frame').classList.contains('hidden')) setTimeout(askForPin, 400); } });
+function askForPin(){
+  const me=state.me; if(!me || !me.is_shop || me.shopAccess!=='open' || document.getElementById('pinSheet')) return;
+  const nameIn=h('input',{ id:'pinName', placeholder:'Shop name, e.g. Yate Mini Market', value:me.shopHidden?'':me.shopName });
+  const pinIn=h('input',{ id:'pinIn', inputmode:'numeric', autocomplete:'off', placeholder:'Shop PIN (at least 4 numbers or letters)' });
+  const err=h('div',{ class:'err hidden' });
+  const m=h('div',{ class:'modal', id:'pinSheet' }, h('div',{ class:'sheet' },
+    h('div',{ class:'sheethead' }, h('b',null,'Protect your shop'), h('button',{ class:'x', html:'✕', onclick:()=>m.remove() })),
+    h('p',{ class:'note' }, 'You saved your first entry. Set a shop PIN now so only your staff can see this shop’s data. Everyone in the shop uses the same PIN, once on each phone.'),
+    me.shopHidden?nameIn:null, pinIn, err,
+    h('div',{ class:'mactions', style:{ marginTop:'10px' } },
+      h('button',{ class:'mrow accent', id:'pinOk', onclick:async ev=>{
+        const n=nameIn.value.trim(), pin=pinIn.value.trim();
+        if(me.shopHidden && n.length<2){ err.textContent='Give the shop a name'; err.classList.remove('hidden'); return; }
+        if(pin.length<4){ err.textContent='The PIN needs at least 4 numbers or letters'; err.classList.remove('hidden'); return; }
+        ev.target.disabled=true;
+        try{ if(me.shopHidden){ await state.api.renameShop(me.shopId, n); me.shopName=me.name=n; me.shopHidden=false; }
+          await state.api.setShopAccess(me.shopId,'password',pin); me.shopAccess='password'; state.savedSomething=false; m.remove(); flash('Shop PIN set'); renderHome(); }
+        catch(e){ ev.target.disabled=false; err.textContent=e.message; err.classList.remove('hidden'); } } }, 'Save the PIN'),
+      h('button',{ class:'mrow ghost', id:'pinLater', onclick:()=>m.remove() }, 'Not now'))));
+  document.body.append(m); setTimeout(()=>(me.shopHidden?nameIn:pinIn).focus(),50);
+}
 
 /* a free, unnamed shop made the moment a visitor opens an app that saves data */
 async function makeFreeSpace(){
@@ -408,7 +458,7 @@ async function enterShop(sh, quiet){
   try{
     let typed;
     if(sh.access==='password'){
-      typed = await askText(sh.name, 'Type the shop password. You only need to do this once on this phone.', 'Shop password', 'password'); if(!typed) return;
+      typed = await askText(sh.name, 'Type the shop PIN. You only need to do this once on this phone.', 'Shop PIN', 'password'); if(!typed) return;
     }
     const r = await state.api.enterShop(sh.id, typed);
     if(r.error){ shopErr(r.error==='wrong' ? (sh.access==='password' ? 'That shop password isn’t right.' : 'This shop’s login changed. Pick it again.') : r.error==='locked' ? 'This shop now has a password. Pick it again and type the password.' : r.error);
@@ -508,8 +558,22 @@ async function renderShopRows(){
         sh.access==='password' ? h('button',{ 'data-act':'open', onclick:()=>adminOpen(sh) }, 'Make open') : null,
         h('button',{ 'data-act':'rename', onclick:async()=>{ const v=await askText('Rename '+sh.name,null,'Shop name','text',sh.name); if(!v||v===sh.name) return; try{ await state.api.renameShop(sh.id,v); flash('Renamed'); renderShopRows(); }catch(e){ flash('Not saved: '+e.message); } } }, 'Rename'),
         h('button',{ 'data-act':'hide', onclick:async()=>{ try{ await state.api.hideShop(sh.id,!sh.hidden); flash(sh.hidden?'Back in the list':'Hidden from the list'); renderShopRows(); }catch(e){ flash('Not saved: '+e.message); } } }, sh.hidden?'Show in list':'Hide from list'),
+        h('button',{ 'data-act':'managers', onclick:()=>pickManagers(sh) }, 'Managers'+((sh.managers||[]).length?' ('+sh.managers.length+')':'')),
         h('button',{ 'data-act':'enter', onclick:()=>enterAsAdmin(sh) }, 'Open this shop')));
   }));
+}
+async function pickManagers(sh){
+  let staff=state.staff; if(!staff || !staff.length){ try{ staff=state.staff=await state.api.staff(); }catch(e){ flash(e.message); return; } }
+  staff=staff.filter(x=>x.active && x.role!=='admin');
+  const on=new Set(sh.managers||[]);
+  const m=h('div',{ class:'modal', id:'mgrSheet' }, h('div',{ class:'sheet' },
+    h('div',{ class:'sheethead' }, h('b',null,'Managers of '+sh.name), h('button',{ class:'x', html:'✕', onclick:()=>m.remove() })),
+    h('p',{ class:'note' }, 'Ticked people open this shop with their own login code and PIN, and see its orders and expiry list. You always can.'),
+    staff.length ? h('div',{ class:'mgrlist' }, staff.map(x=>h('label',{ class:'mgr' }, h('input',{ type:'checkbox', 'data-uid':x.id, checked:on.has(x.id) }), ' '+x.name+' ', h('small',null,x.employee_code+' · '+x.role)))) : h('p',{ class:'note' },'No staff logins yet. Add people in Gas › Settings › Employees.'),
+    h('div',{ class:'mactions', style:{ marginTop:'10px' } }, h('button',{ class:'mrow accent', id:'mgrSave', onclick:async()=>{
+      const uids=[...m.querySelectorAll('input[data-uid]:checked')].map(i=>i.dataset.uid);
+      try{ await state.api.setShopManagers(sh.id, uids); m.remove(); flash('Saved'); renderShopRows(); }catch(e){ flash('Not saved: '+e.message); } } }, 'Save'))));
+  document.body.append(m);
 }
 async function adminSetPw(sh){
   const v = await askText('Password for '+sh.name, 'At least 4 characters. Phones already in the shop will be asked for it within the hour.', 'Shop password'); if(v==null) return;

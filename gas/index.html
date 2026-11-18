@@ -723,6 +723,11 @@ async function boot(){
         detach();
         if(!u){S.me=null;store.setPrefix(COLLECTION_PREFIX);if(await trySso())return;S.boot='login';render();return}
         try{S.me=await identify(u)}catch(e){S.loginErr=e.message;S.me=null;await store.signOut();return}
+        // the admin, or a manager the admin assigned, opening one of the free shops from Rotawise (…/gas/?space=<shop>)
+        {const want=new URLSearchParams(location.search).get('space');
+          if(want&&/^[a-z0-9]{6,30}$/.test(want)&&!S.me.shop){   // the database rules decide who may: the admin and that shop's managers
+            try{const sh=await store.rawOne('hub_shops',want);
+              if(sh){store.setPrefix(`hub_shops/${want}/gas_`);S.me={...S.me,role:'admin',stores:[],shop:want,shopName:sh.name,visiting:true}}}catch(e){}}}
         S.loginErr='';S.boot='ready';attach();render();
       });
     }catch(e){S.boot='error';S.err='Could not load Firebase ('+(e.message||e)+'). Check your connection.'}
