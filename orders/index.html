@@ -39,6 +39,10 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .pic{width:64px;height:44px;border-radius:8px;object-fit:cover;background:var(--soft);border:1px solid var(--line);flex:none;cursor:zoom-in}
 .photobtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fl{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:600}.fl input,.fl select{font-weight:400;color:var(--ink)}
+.row.exp{flex-wrap:wrap}.row.exp .nm{flex:1 1 160px;min-width:0}@media(max-width:560px){.row.exp .expbtns{flex-basis:100%;justify-content:flex-end}}.row.exp.remove{border-left:4px solid #d33}.row.exp.reduce{border-left:4px solid #e08a00}.row.exp.done{opacity:.6}
+.expbtns{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}.tag.bad{background:#fde2e2;color:#a11}.tag.warn{background:#fff1d6;color:#8a5300}.tag.soon{background:#fff7c2;color:#6b5600}.tag.info{background:#e0ecff;color:#1d4ed8}.tag.muted{background:var(--line);color:var(--muted)}
+.card h2 .cnt{background:var(--accent);color:#fff;border-radius:99px;font-size:12px;padding:1px 8px;vertical-align:middle}.cnt.bad{background:#d33}.card.urgent{border-color:#f3b0b0}.bad-t{color:#b11}.warn-t{color:#a36200}.exp-photo{height:170px;border-radius:12px;background:var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);margin-bottom:8px}.exp-photo img{max-height:100%;max-width:100%}
+.chkrow{display:flex;gap:6px;align-items:center;font-size:13px;margin:8px 0}.card summary{cursor:pointer;font-weight:600}
 .pic.none{display:grid;place-items:center;font-size:10px;color:var(--muted);cursor:default;text-align:center;line-height:1.1}
 .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;font-size:12.5px;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-right:6px}
 .chk{display:block;margin-top:4px;font-size:12.5px;color:var(--warn);background:var(--warnbg);border-radius:7px;padding:3px 7px}
@@ -146,12 +150,18 @@ async function makeApi(){
       await bt.commit();return {id:oref.id,...o}},
     async orders(store){return (await mine('go_orders',store)).sort(byNew).slice(0,30)},
     async getEmails(){const d=await sp.get('go_settings','email');return (d&&d.value)||{}},
-    async setEmails(v){await sp.set('go_settings','email',{value:v})}
+    async setEmails(v){await sp.set('go_settings','email',{value:v})},
+    async expiry(store){return (await mine('go_expiry',store))},
+    async addExpiry(row){return await sp.add('go_expiry',strip(row))},
+    async updateExpiry(id,patch){await sp.patch('go_expiry',id,strip(patch))},
+    async delExpiry(id){await sp.del('go_expiry',id)},
+    async getExpCfg(){const d=await sp.get('go_settings','expiry');return (d&&d.value)||{}},
+    async setExpCfg(v){await sp.set('go_settings','expiry',{value:v})}
   };
 }
 
 /* ---------------- state ---------------- */
-const S={api:null,me:null,stores:[],store:null,tab:'need',items:[],catalog:[],reqs:[],subs:[],orders:[],emails:{},cat:'All',q:'',draft:null,basket:{}};
+const S={api:null,me:null,stores:[],store:null,tab:'need',items:[],catalog:[],reqs:[],subs:[],orders:[],emails:{},cat:'All',q:'',draft:null,basket:{},exp:[],expCfg:{}};
 const isMgr=()=>!!(S.me&&(S.me.is_admin||(S.me.is_manager&&!S.me.is_shop)));
 const storeName=()=>{const i=S.stores.findIndex(s=>s.id===S.store);return i<0?'your shop':(S.stores[i].name||'Store '+(i+1))};
 const isLow=it=>it.min_qty!=null&&it.current_stock!=null&&Number(it.current_stock)<=Number(it.min_qty);
@@ -188,23 +198,24 @@ function buildOrderLines(){
 }
 
 async function load(){
-  const jobs=[S.api.items(S.store),S.api.openRequests(S.store),S.api.catalog().catch(()=>[])];
+  const jobs=[S.api.items(S.store),S.api.openRequests(S.store),S.api.catalog().catch(()=>[]),S.api.expiry?S.api.expiry(S.store).catch(()=>[]):[],S.api.getExpCfg?S.api.getExpCfg().catch(()=>({})):{}];
   if(isMgr())jobs.push(S.api.submissions(S.store));
-  const r=await Promise.all(jobs);[S.items,S.reqs,S.catalog]=r;S.subs=r[3]||[];
+  const r=await Promise.all(jobs);[S.items,S.reqs,S.catalog,S.exp,S.expCfg]=r;S.subs=r[5]||[];S.exp=S.exp||[];S.expCfg=S.expCfg||{};
   S.draft=null;loadBasket();
 }
 async function reload(){try{await load()}catch(e){flash('Could not load: '+e.message)}render()}
 
 /* ---------------- render ---------------- */
 function render(){
-  const tabs=[['need','What we need'],['stock','Stock count']];
+  const tabs=[['need','What we need'],['stock','Stock count'],['expiry','Expiry']];
   const newSubs=S.subs.filter(s=>s.status==='new').length;
-  if(isMgr())tabs.unshift(['subs','Submitted']),tabs.push(['order','Order'],['items','Items & levels'],['history','Past orders']);
+  if(isMgr())tabs.unshift(['subs','Submitted']),tabs.splice(3,0,['order','Order'],['items','Items & levels'],['history','Past orders']);
+  const due=expDue().length;
   if(!tabs.some(t=>t[0]===S.tab))S.tab=tabs[0][0];
   const n=buildOrderLines().length;
   $('#tabs').replaceChildren(...tabs.map(([k,t])=>h('button',{class:S.tab===k?'on':'','data-tab':k,onclick:()=>{S.tab=k;if(k==='history')loadHistory();else render()}},t,
-    k==='order'&&n?h('span',{class:'cnt'},n):null,k==='subs'&&newSubs?h('span',{class:'cnt'},newSubs):null)));
-  $('#main').replaceChildren(({subs:viewSubs,need:viewNeed,stock:viewStock,order:viewOrder,items:viewItems,history:viewHistory}[S.tab]||viewNeed)());
+    k==='order'&&n?h('span',{class:'cnt'},n):null,k==='subs'&&newSubs?h('span',{class:'cnt'},newSubs):null,k==='expiry'&&due?h('span',{class:'cnt bad'},due):null)));
+  $('#main').replaceChildren(({subs:viewSubs,need:viewNeed,stock:viewStock,order:viewOrder,items:viewItems,history:viewHistory,expiry:viewExpiry}[S.tab]||viewNeed)());
   renderBasketBar();
 }
 function catChips(list){
@@ -476,6 +487,169 @@ function viewHistory(){
       h('button',{class:'btn alt sm',onclick:()=>printOrder(o.lines||[],'Order — '+storeName()+' — '+when(o.created_at))},'Print'))):h('div',{class:'empty'},'No orders saved yet.'));
 }
 
+/* ---------------- expiry dates: photo + date, reduce reminder, take-off-shelf reminder ---------------- */
+const pad2=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+const todayStr=()=>ymd(new Date());
+const nowStr=()=>{const d=new Date();return ymd(d)+'T'+pad2(d.getHours())+':'+pad2(d.getMinutes())};
+const addDays=(s,n)=>{const [y,m,d]=s.split('-').map(Number);return ymd(new Date(y,m-1,d+n))};
+const daysTo=s=>{const [y,m,d]=s.split('-').map(Number),t=new Date();return Math.round((new Date(y,m-1,d)-new Date(t.getFullYear(),t.getMonth(),t.getDate()))/864e5)};
+const dmy=s=>s?new Date(s.length>10?s:s+'T12:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
+const dmyt=s=>s?dmy(s)+' '+s.slice(11,16):'';
+const lastOfMonth=ym=>{const [y,m]=ym.split('-').map(Number);return ymd(new Date(y,m,0))};
+const expDays=()=>{const c=(S.expCfg||{})[S.store]||{};return Number.isFinite(Number(c.days))&&c.days!==''&&c.days!=null?Number(c.days):10};
+/* where each product stands right now */
+function expState(e){
+  if(e.removed_at||e.status==='done')return 'done';
+  if(e.expiry<=todayStr())return 'remove';
+  if(e.reduce_at&&e.reduce_at<=nowStr()&&!e.reduced_at)return 'reduce';
+  if(e.reduced_at)return 'reduced';
+  if(daysTo(e.expiry)<=31)return 'month';
+  return 'later';
+}
+const expDue=()=>S.exp.filter(e=>['remove','reduce'].includes(expState(e)));
+const defReduce=exp=>{let r=addDays(exp,-expDays())+'T09:00';if(r<nowStr())r=nowStr();return r};
+
+/* read a date printed on the pack (best before / use by / BBE) from the photo */
+const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
+function findLabelDate(text){
+  const t=' '+String(text||'').toLowerCase().replace(/[|]/g,'1').replace(/\s+/g,' ')+' ',out=[];
+  const yy=y=>{y=Number(y);return y<100?2000+y:y};
+  const push=(y,m,d,monthOnly,i)=>{y=yy(y);m=Number(m);d=Number(d);if(m<1||m>12||y<2020||y>2045)return;if(!monthOnly&&(d<1||d>31))return;
+    const near=/(best|before|use|by|bbe|exp|bb)/.test(t.slice(Math.max(0,i-18),i));out.push({date:monthOnly?lastOfMonth(y+'-'+pad2(m)):ymd(new Date(y,m-1,d)),monthOnly,near})};
+  let m;
+  const r1=/(\d{1,2})\s?[\/.\-]\s?(\d{1,2})\s?[\/.\-]\s?(\d{2,4})/g;while((m=r1.exec(t)))push(m[3],m[2],m[1],false,m.index);
+  const r2=/(\d{1,2})\s?(?:st|nd|rd|th)?[\s.\-\/]?(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*[\s.\-\/]?(\d{2,4})/g;while((m=r2.exec(t)))push(m[3],MON[m[2]],m[1],false,m.index);
+  const r3=/(?:^|[^\d])(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*[\s.\-\/]?(\d{2}(?:\d{2})?)(?!\d)/g;while((m=r3.exec(t))){if(!out.some(o=>!o.monthOnly&&o.date.slice(0,7)===yy(m[2])+'-'+pad2(MON[m[1]])))push(m[2],MON[m[1]],1,true,m.index)}
+  const r4=/(?:^|[^\d\/])(\d{1,2})\s?[\/.]\s?(20\d{2})(?!\d)/g;while((m=r4.exec(t)))push(m[2],m[1],1,true,m.index);
+  if(!out.length)return null;
+  out.sort((a,b)=>(b.near-a.near)||a.date.localeCompare(b.date));return out[0];
+}
+async function readDateFromPhoto(file){
+  const OCR='../gas/ocr/';
+  if(!window.Tesseract)await new Promise((res,rej)=>{const s=document.createElement('script');s.src=OCR+'tesseract.min.js';s.onload=res;s.onerror=()=>rej(new Error('Could not load the reader'));document.head.append(s)});
+  const u=URL.createObjectURL(file),im=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u});
+  const k=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);
+  const w=await Tesseract.createWorker('eng',1,{workerPath:OCR+'worker.min.js',corePath:OCR,langPath:OCR,gzip:true});
+  try{const r=await w.recognize(c);return findLabelDate(r.data.text)}finally{await w.terminate()}
+}
+
+function expSheet(e){
+  const isNew=!e;e=e?{...e}:{store_id:S.store,name:'',qty:1,expiry:'',reduce_at:'',note:'',photo:null};
+  let reduceTouched=!isNew,monthOnly=!!e.month_only,file=null;
+  const opts=[...new Set([...S.items.map(label),...S.catalog.map(c=>c.name+(c.size?' '+c.size:''))])].sort();
+  const dl=h('datalist',{id:'expNames'},opts.map(o=>h('option',{value:o})));
+  const photoBox=h('div',{class:'exp-photo'});
+  const showPhoto=()=>photoBox.replaceChildren(e.photo?h('img',{src:e.photo,alt:''}):h('span',null,'No photo yet'));showPhoto();
+  const found=h('div',{class:'note',id:'expFound'});
+  const name=h('input',{id:'expName',list:'expNames',placeholder:'Product, e.g. Coca-Cola 500ml',value:e.name,autocomplete:'off'});
+  const qty=h('input',{id:'expQty',type:'number',min:'1',step:'1',value:e.qty==null?'':e.qty});
+  const dIn=h('input',{id:'expDate',type:'date',value:monthOnly?'':e.expiry});
+  const mIn=h('input',{id:'expMonth',type:'month',value:monthOnly&&e.expiry?e.expiry.slice(0,7):''});
+  const mChk=h('input',{type:'checkbox',id:'expMonthOnly',checked:monthOnly});
+  const rIn=h('input',{id:'expReduce',type:'datetime-local',value:e.reduce_at||''});
+  const note=h('input',{id:'expNote',placeholder:'Shelf, aisle or anything else (optional)',value:e.note||''});
+  const dateBox=h('div');
+  const expiry=()=>monthOnly?(mIn.value?lastOfMonth(mIn.value):''):dIn.value;
+  const sync=()=>{dateBox.replaceChildren(monthOnly?mIn:dIn);const x=expiry();if(x&&!reduceTouched)rIn.value=defReduce(x)};
+  dIn.oninput=sync;mIn.oninput=sync;mChk.onchange=()=>{monthOnly=mChk.checked;if(monthOnly&&dIn.value)mIn.value=dIn.value.slice(0,7);else if(!monthOnly&&mIn.value)dIn.value=lastOfMonth(mIn.value);sync()};
+  rIn.oninput=()=>{reduceTouched=true};sync();
+  const pick=capture=>{const inp=h('input',{type:'file',accept:'image/*',capture:capture?'environment':null,style:{display:'none'},onchange:async ev=>{const f=ev.target.files[0];inp.remove();if(!f)return;
+    file=f;try{e.photo=await shrinkPhoto(f);showPhoto()}catch(er){flash(er.message);return}
+    found.textContent='Reading the date on the pack…';
+    try{const r=await readDateFromPhoto(f);
+      if(r&&!expiry()){monthOnly=r.monthOnly;mChk.checked=monthOnly;if(monthOnly)mIn.value=r.date.slice(0,7);else dIn.value=r.date;sync();found.textContent='Found '+(r.monthOnly?'end of '+new Date(r.date).toLocaleDateString('en-GB',{month:'long',year:'numeric'}):dmy(r.date))+' on the pack. Check it is right.'}
+      else found.textContent=r?'The pack says '+dmy(r.date)+'.':'Could not read a date. Type it in.'}catch(er){found.textContent='Type the date in.'}}});
+    document.body.append(inp);inp.click()};
+  const m=h('div',{class:'modal',onclick:ev=>{if(ev.target===m)m.remove()}},h('div',{class:'sheet'},
+    h('h2',{style:{marginTop:0}},isNew?'Add an expiry date':'Change '+e.name),
+    photoBox,h('div',{class:'photobtns'},h('button',{class:'btn',id:'expTake',onclick:()=>pick(true)},'Take a photo'),h('button',{class:'btn alt',id:'expUpload',onclick:()=>pick(false)},'Upload'),
+      e.photo?h('button',{class:'btn alt',onclick:()=>{e.photo=null;showPhoto()}},'Remove photo'):null),found,
+    h('label',{class:'fl'},'Product',name,dl),
+    h('div',{class:'grid2'},h('label',{class:'fl'},'How many',qty),h('label',{class:'fl'},'Expires',dateBox)),
+    h('label',{class:'chkrow'},mChk,' Only the month is on the pack (e.g. "BBE MAR 2027")'),
+    h('label',{class:'fl'},'Reduce the price on',rIn,h('small',{style:{fontWeight:400}},expDays()+' days before it expires, unless you pick another date and time.')),
+    h('label',{class:'fl'},'Note',note),
+    h('div',{class:'photobtns',style:{marginTop:'12px'}},
+      h('button',{class:'btn',id:'expSave',onclick:async ev=>{
+        const x=expiry(),n=name.value.trim();
+        if(!n)return flash('Type the product');if(!x)return flash('Pick the expiry date');
+        const it=S.items.find(i=>label(i).toLowerCase()===n.toLowerCase()),c=!it&&S.catalog.find(c=>(c.name+(c.size?' '+c.size:'')).toLowerCase()===n.toLowerCase());
+        const row={store_id:S.store,name:n,qty:qty.value===''?null:Math.max(1,Math.round(Number(qty.value))),expiry:x,month_only:monthOnly,reduce_at:rIn.value||defReduce(x),note:note.value.trim()||null,
+          photo:e.photo||(it&&it.photo)||(c&&c.photo)||null,item_id:it?it.id:null,code:(it&&it.code)||(c&&c.code)||null};
+        ev.target.disabled=true;
+        try{if(isNew){row.status='open';row.created_at=new Date().toISOString();row.created_by=S.me.id;row.created_by_name=S.me.name||null;S.exp.push(await S.api.addExpiry(row))}
+          else{if(row.reduce_at!==e.reduce_at)row.mailed_reduce=null;if(row.expiry!==e.expiry)row.mailed_remove=null;await S.api.updateExpiry(e.id,row);Object.assign(S.exp.find(z=>z.id===e.id),row)}
+          flash('Saved');m.remove();render()}catch(er){ev.target.disabled=false;flash('Not saved: '+er.message)}}},'Save'),
+      !isNew?h('button',{class:'btn alt',id:'expDel',onclick:async()=>{if(!confirm('Delete this expiry date?'))return;try{await S.api.delExpiry(e.id);S.exp=S.exp.filter(z=>z.id!==e.id);m.remove();render()}catch(er){flash(er.message)}}},'Delete'):null,
+      h('button',{class:'btn alt',onclick:()=>m.remove()},'Cancel'))));
+  document.body.append(m);
+}
+async function expMark(e,kind){
+  const patch={};
+  if(kind==='reduced'){const p=prompt('New price for '+e.name+' (optional), e.g. 0.50','');if(p===null)return;patch.reduced_at=nowStr();patch.reduced_price=p.trim()===''?null:Number(String(p).replace(/[£,]/g,''))||null}
+  else if(kind==='removed'){patch.removed_at=nowStr();patch.status='done'}
+  else if(kind==='undo'){Object.assign(patch,{removed_at:null,status:'open',reduced_at:null,reduced_price:null})}
+  try{await S.api.updateExpiry(e.id,patch);Object.assign(e,patch);flash(kind==='undo'?'Back on the list':kind==='removed'?'Taken off the shelf':'Marked as reduced');document.querySelectorAll('#expAlert [data-exp="'+e.id+'"]').forEach(r=>r.replaceWith(expRow(e)));render()}catch(er){flash('Not saved: '+er.message)}
+}
+function expRow(e){
+  const s=expState(e),d=daysTo(e.expiry);
+  const tag={remove:['Take off the shelf','bad'],reduce:['Reduce the price now','warn'],reduced:['Reduced'+(e.reduced_price!=null?' to £'+Number(e.reduced_price).toFixed(2):''),'info'],
+    month:[d===0?'Expires today':'Expires in '+d+(d===1?' day':' days'),'soon'],later:['Expires in '+d+' days','muted'],done:['Taken off '+dmy(e.removed_at),'muted']}[s];
+  return h('div',{class:'row exp '+s,'data-exp':e.id},
+    e.photo?h('img',{class:'pic',src:e.photo,alt:e.name,onclick:()=>expSheet(e)}):h('button',{class:'pic none',type:'button',onclick:()=>expSheet(e)},'+ photo'),
+    h('div',{class:'nm',style:{cursor:'pointer'},onclick:()=>expSheet(e)},h('b',null,e.name,e.qty>1?' × '+e.qty:''),
+      h('small',null,(e.month_only?'End of '+new Date(e.expiry+'T12:00').toLocaleDateString('en-GB',{month:'short',year:'numeric'}):'Expires '+dmy(e.expiry))+
+        (!['done','remove'].includes(s)&&!e.reduced_at&&e.reduce_at?' · reduce '+dmyt(e.reduce_at):'')+(e.note?' · '+e.note:'')+(e.created_by_name?' · '+e.created_by_name:'')),
+      h('span',{class:'tag '+tag[1]},tag[0])),
+    h('div',{class:'expbtns'},
+      s==='done'?h('button',{class:'btn alt sm','data-act':'undo',onclick:()=>expMark(e,'undo')},'Undo'):[
+        s!=='reduced'&&s!=='remove'?h('button',{class:'btn '+(s==='reduce'?'':'alt ')+'sm','data-act':'reduced',onclick:()=>expMark(e,'reduced')},'Reduced'):null,
+        h('button',{class:'btn '+(s==='remove'?'':'alt ')+'sm','data-act':'removed',onclick:()=>expMark(e,'removed')},'Off shelf')]));
+}
+function viewExpiry(){
+  const all=S.exp.slice().sort((a,b)=>a.expiry.localeCompare(b.expiry));
+  const by=k=>all.filter(e=>expState(e)===k);
+  const now=[...by('remove'),...by('reduce')],soon=[...by('reduced'),...by('month')],later=by('later');
+  const done=all.filter(e=>expState(e)==='done'&&e.removed_at>=addDays(todayStr(),-30)).sort((a,b)=>b.removed_at.localeCompare(a.removed_at));
+  const sec=(t,list,cls)=>list.length?h('div',{class:'card '+(cls||'')},h('h2',null,t,h('span',{class:'cnt',style:{marginLeft:'8px'}},list.length)),list.map(expRow)):null;
+  const cfg=(S.expCfg[S.store]=S.expCfg[S.store]||{});
+  return h('div',null,
+    h('div',{class:'bar',style:{marginTop:0}},h('button',{class:'btn',id:'expAdd',onclick:()=>expSheet()},'+ Add an expiry date'),
+      all.length?h('button',{class:'btn alt',onclick:printExpiry},'Print'):null),
+    !all.length?h('div',{class:'card'},h('h2',null,'Never sell out-of-date stock'),h('p',{class:'note'},'Take a photo of the product and its date. Rotawise reminds you to reduce the price '+expDays()+' days before it expires, and to take it off the shelf when it does, every time you open this shop, and by email.')):null,
+    sec('Do this now',now,'urgent'),sec('Expiring this month',soon),sec('Later',later),
+    done.length?h('details',{class:'card'},h('summary',null,'Taken off the shelf (last 30 days): '+done.length),done.map(expRow)):null,
+    h('details',{class:'card',id:'expSettings'},h('summary',null,'Reminder settings'),
+      h('label',{class:'fl',style:{marginTop:'10px'}},'Reduce prices this many days before they expire',h('input',{id:'expDays',type:'number',min:'0',max:'90',value:expDays()})),
+      h('label',{class:'fl',style:{marginTop:'10px'}},'Email reminders to (up to 3 addresses, comma between)',h('input',{id:'expEmails',type:'email',multiple:true,placeholder:'manager@shop.co.uk',value:cfg.to||''})),
+      h('p',{class:'note'},'An email goes out when a price should be reduced and when a product expires.'),
+      h('button',{class:'btn alt',id:'expCfgSave',onclick:async()=>{
+        const to=$('#expEmails').value.split(/[,;\s]+/).filter(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).slice(0,3).join(', '),days=Math.max(0,Math.min(90,Math.round(Number($('#expDays').value)||0)));
+        S.expCfg[S.store]={to,days};try{await S.api.setExpCfg(S.expCfg);flash('Saved');render()}catch(e){flash('Not saved: '+e.message)}}},'Save')));
+}
+function printExpiry(){
+  const rows=S.exp.filter(e=>expState(e)!=='done').sort((a,b)=>a.expiry.localeCompare(b.expiry));
+  const w=window.open('','_blank');if(!w)return flash('Allow pop-ups to print');
+  w.document.write('<title>Expiry dates</title><style>body{font:14px system-ui;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px;text-align:left}img{width:48px;height:48px;object-fit:cover}</style><h2>Expiry dates · '+storeName()+' · '+dmy(todayStr())+'</h2><table><tr><th></th><th>Product</th><th>Qty</th><th>Expires</th><th>Reduce on</th><th>Status</th></tr>'+
+    rows.map(e=>'<tr><td>'+(e.photo?'<img src="'+e.photo+'">':'')+'</td><td>'+e.name.replace(/</g,'&lt;')+'</td><td>'+(e.qty||'')+'</td><td>'+dmy(e.expiry)+'</td><td>'+(e.reduced_at?'done':dmyt(e.reduce_at))+'</td><td>'+({remove:'TAKE OFF',reduce:'REDUCE NOW',reduced:'Reduced',month:'This month',later:''}[expState(e)])+'</td></tr>').join('')+'</table>');
+  w.document.close();setTimeout(()=>w.print(),300);
+}
+/* opening the shop: tell them straight away what needs doing */
+function expiryAlert(){
+  const due=expDue();if(!due.length)return;
+  const key='go_exp_seen_'+S.store,sig=due.map(e=>e.id+expState(e)).sort().join(',');
+  try{if(sessionStorage.getItem(key)===sig)return;sessionStorage.setItem(key,sig)}catch(e){}
+  const rm=due.filter(e=>expState(e)==='remove'),rd=due.filter(e=>expState(e)==='reduce');
+  const m=h('div',{class:'modal',id:'expAlert',onclick:ev=>{if(ev.target===m)m.remove()}},h('div',{class:'sheet'},
+    h('h2',{style:{marginTop:0}},'Expiry check · '+storeName()),
+    rm.length?h('p',null,h('b',{class:'bad-t'},rm.length+(rm.length===1?' product has':' products have')+' expired: take '+(rm.length===1?'it':'them')+' off the shelf.')):null,
+    rd.length?h('p',null,h('b',{class:'warn-t'},rd.length+(rd.length===1?' product needs':' products need')+' a price reduction.')):null,
+    h('div',null,[...rm,...rd].slice(0,8).map(expRow)),due.length>8?h('p',{class:'note'},'and '+(due.length-8)+' more'):null,
+    h('div',{class:'photobtns'},h('button',{class:'btn',onclick:()=>{m.remove();S.tab='expiry';render()}},'Open Expiry'),h('button',{class:'btn alt',onclick:()=>m.remove()},'Later'))));
+  document.body.append(m);
+}
+
 /* ---------------- boot ---------------- */
 (async function(){
   try{const t=localStorage.getItem('rw_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}
@@ -491,9 +665,12 @@ function viewHistory(){
     S.store=(list.find(s=>s.id===saved)||list.find(s=>s.id===me.store_id)||list[0]).id;
     const sel=$('#storeSel');sel.replaceChildren(...list.map((s,i)=>h('option',{value:s.id,selected:s.id===S.store},s.name||('Store '+(i+1)))));
     sel.classList.toggle('hidden',list.length<2);
-    sel.onchange=async()=>{S.store=sel.value;try{localStorage.setItem('go_store',S.store)}catch(e){}await reload()};
+    sel.onchange=async()=>{S.store=sel.value;try{localStorage.setItem('go_store',S.store)}catch(e){}await reload();expiryAlert()};
     if(isMgr()){S.tab='subs';try{S.emails=await S.api.getEmails()}catch(e){}}
     await reload();
+    expiryAlert();
+    // keep checking while the app stays open (a reduce time can pass during the day)
+    setInterval(()=>{if(!document.querySelector('.modal')&&!(document.activeElement&&/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)))render();expiryAlert()},5*60*1000);
   }catch(e){$('#main').replaceChildren(h('div',{class:'empty'},'Could not load Goods Orders: '+e.message))}
 })();
 </script>
