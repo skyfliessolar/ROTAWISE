@@ -138,6 +138,8 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 .pill{font-size:12px;font-weight:700;border-radius:99px;padding:2px 8px}.pill.bad{background:#fde2e2;color:#a11}.pill.warn{background:#fff1d6;color:#8a5300}.pill.ok{background:var(--line);color:var(--muted)}
 .mgrlist{display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto}.mgr{display:flex;align-items:center;gap:6px}.mgr small{color:var(--muted)}
 #myShops .panel{margin-top:16px}
+.nsopts{display:flex;flex-direction:column;gap:8px;margin-top:6px}.nsopt{display:flex;gap:10px;align-items:flex-start;border:2px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}.nsopt.on{border-color:var(--accent)}.nsopt input{margin-top:3px;width:18px;height:18px;flex:0 0 18px;padding:0;accent-color:var(--accent)}.nsopt span{flex:1;text-align:left}.nsopt span{display:flex;flex-direction:column;gap:2px}.nsopt small{color:var(--muted);font-size:12.5px}
+.fl{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}.fl input{font-weight:400}.mbtn.accent{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -151,7 +153,7 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
     <div class="sub">Free for every shop. Pick yours, or create one.</div>
     <div id="shopList"></div>
     <div id="shopErr" class="err hidden"></div>
-    <button class="btn alt" id="newShopBtn" type="button">+ Create a new shop</button>
+    <button class="btn alt" id="newShopBtn" type="button">+ Add shop</button>
     <button class="linkbtn" id="personalBtn" type="button">Staff or admin? Sign in with your own login</button>
     <button class="linkbtn" id="homeBtn" type="button">‹ Back to the free apps</button>
   </div>
@@ -315,7 +317,8 @@ function renderHome(){
     + '<small>'+esc(hint())+'</small>';
   const tiles = $('#tiles'); tiles.innerHTML='';
   const bn = $('#banner'); bn.replaceChildren(); bn.classList.add('hidden');
-  if(me.guest){ bn.classList.remove('hidden'); bn.append(h('span',null,'Already have a shop, or a staff login?'), h('button',{ class:'mbtn', id:'bnPick', onclick:()=>showShops(false) }, 'Pick a shop'), h('button',{ class:'mbtn', id:'bnLogin', onclick:()=>$('#personalBtn').click() }, 'Sign in')); }
+  if(me.guest){ bn.classList.remove('hidden'); bn.append(h('span',null,'Add your shop with its name, with or without a password. Already have one, or a staff login?'),
+    h('button',{ class:'mbtn accent', id:'bnAdd', onclick:addShopAndEnter }, '+ Add shop'), h('button',{ class:'mbtn', id:'bnPick', onclick:()=>showShops(false) }, 'Pick a shop'), h('button',{ class:'mbtn', id:'bnLogin', onclick:()=>$('#personalBtn').click() }, 'Sign in')); }
   else if(me.is_shop && (me.shopHidden || me.shopAccess==='open')){ bn.classList.remove('hidden');
     bn.append(h('span',null, me.shopHidden ? 'Your data is saved here. Give your shop a name so you can find it again, and add a password whenever you want to keep it private.' : 'Anyone with the link can open this shop. Add a password when you want to keep it private.'),
       me.shopHidden ? h('button',{ class:'mbtn', id:'bnName', onclick:renameMine }, 'Name my shop') : null,
@@ -469,28 +472,40 @@ async function enterShop(sh, quiet){
 }
 function createShopSheet(fromAdmin){
   return new Promise(resolve=>{
-  const nameIn=h('input',{ id:'nsName', placeholder:'Shop name, e.g. Yate Mini Market', style:{ marginTop:'6px' } });
-  const pwIn=h('input',{ id:'nsPw', type:'text', autocomplete:'off', placeholder:'Shop password (optional)', style:{ marginTop:'8px' } });
+  const nameIn=h('input',{ id:'nsName', placeholder:'Shop name, e.g. Yate Mini Market', autocomplete:'organization', style:{ marginTop:'6px' } });
+  const pwIn=h('input',{ id:'nsPw', type:'text', inputmode:'numeric', autocomplete:'off', placeholder:'Shop PIN (at least 4 numbers or letters)' });
+  const pwBox=h('div',{ class:'hidden', style:{ marginTop:'8px' } }, pwIn, h('p',{ class:'note', style:{ margin:'6px 0 0' } }, 'Everyone in the shop uses this PIN, once on each phone. '+(fromAdmin?'You can see it in Shops.':'Your admin can always see it.')));
+  let mode='open';
+  const opt=(k,title,sub)=>h('label',{ class:'nsopt'+(k===mode?' on':''), 'data-mode':k },
+    h('input',{ type:'radio', name:'nsMode', value:k, checked:k===mode, onchange:()=>{ mode=k; m.querySelectorAll('.nsopt').forEach(x=>x.classList.toggle('on',x.dataset.mode===k)); pwBox.classList.toggle('hidden',k!=='pin'); if(k==='pin') setTimeout(()=>pwIn.focus(),30); } }),
+    h('span',null,h('b',null,title),h('small',null,sub)));
   const err=h('div',{ class:'err hidden' });
   const close=v=>{ m.remove(); resolve(v); };
-  const m=h('div',{ class:'modal' }, h('div',{ class:'sheet' },
-    h('div',{ class:'sheethead' }, h('b',null,'Create a new shop'), h('button',{ class:'x', html:'✕', onclick:()=>close(null) })),
-    h('p',{ class:'note' }, 'Free. The shop gets its own Gas Deliveries, Goods Orders and Documents. Other shops can’t see its data.'),
-    nameIn,
-    h('p',{ class:'note', style:{ marginTop:'12px' } }, 'No password: anyone with the link can open it. You can add one any time. With a password, staff type it once on each phone.'),
-    pwIn, err,
-    h('div',{ class:'mactions', style:{ marginTop:'12px' } }, h('button',{ class:'mrow accent', id:'nsGo', onclick:async ev=>{
-      const name=nameIn.value.trim(), pw=pwIn.value.trim();
-      if(name.length<2){ nameIn.focus(); return; }
-      if(pw && pw.length<4){ err.textContent='The shop password needs at least 4 characters.'; err.classList.remove('hidden'); return; }
-      ev.target.disabled=true; ev.target.textContent='Creating…';
+  const go=h('button',{ class:'mrow accent', id:'nsGo', onclick:async ev=>{
+      const name=nameIn.value.trim(), pw=mode==='pin'?pwIn.value.trim():'';
+      const bad=t=>{ err.textContent=t; err.classList.remove('hidden'); };
+      if(name.length<2){ bad('Type the shop name.'); nameIn.focus(); return; }
+      if(mode==='pin' && pw.length<4){ bad('The shop PIN needs at least 4 numbers or letters.'); pwIn.focus(); return; }
+      err.classList.add('hidden'); ev.target.disabled=true; ev.target.textContent='Adding…';
       try{ const r = await state.api.createShop(name, pw||undefined, { keepSession:!!fromAdmin }); close(r); }
-      catch(e){ err.textContent=e.message; err.classList.remove('hidden'); ev.target.disabled=false; ev.target.textContent='Create shop'; }
-    } }, 'Create shop'))));
+      catch(e){ bad(e.message); ev.target.disabled=false; ev.target.textContent='Add shop'; }
+    } }, 'Add shop');
+  const m=h('div',{ class:'modal' }, h('div',{ class:'sheet' },
+    h('div',{ class:'sheethead' }, h('b',null,'Add a shop'), h('button',{ class:'x', html:'✕', onclick:()=>close(null) })),
+    h('p',{ class:'note' }, 'Free. The shop gets its own Gas Deliveries, Goods Orders with expiry dates, and Documents. Other shops can’t see its data.'),
+    h('label',{ class:'fl' }, 'Shop name', nameIn),
+    h('div',{ class:'fl', style:{ marginTop:'12px' } }, 'How do people get in?'),
+    h('div',{ class:'nsopts' },
+      opt('open','Without a password','Anyone with the link can open it. You can add a PIN later.'),
+      opt('pin','With a shop PIN','Only people who know the PIN can open it.')),
+    pwBox, err,
+    h('div',{ class:'mactions', style:{ marginTop:'12px' } }, go)));
+  [nameIn,pwIn].forEach(i=>i.addEventListener('keydown',e=>{ if(e.key==='Enter') go.click(); }));
   document.body.appendChild(m); setTimeout(()=>nameIn.focus(),50);
   });
 }
-$('#newShopBtn').onclick = async ()=>{ const r = await createShopSheet(false); if(!r) return; lsSet('rw_shop', r.id); flash(r.name+' is ready'); await loadProfileAndRender(); };
+async function addShopAndEnter(){ const r = await createShopSheet(false); if(!r) return; lsSet('rw_shop', r.id); flash(r.name+' is ready'); await loadProfileAndRender(); }
+$('#newShopBtn').onclick = addShopAndEnter;
 $('#personalBtn').onclick = ()=>{ show('login'); $('#loginErr').classList.add('hidden'); setTimeout(()=>$('#code').focus(),50); };
 $('#toShops').onclick = ()=> showShops(false);
 $('#homeBtn').onclick = ()=>{ state.me = { guest:true }; state.access={}; show('shell'); renderHome(); };
