@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Rotawise</title>
+<link rel="manifest" href="/hub/manifest.json">
+<link rel="apple-touch-icon" href="/hub/icon-180.png">
+<meta name="theme-color" content="#14273D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Rotawise">
 <meta name="theme-color" content="#14273D">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314273D'/%3E%3Cpath d='M9 22V10h6a4 4 0 0 1 1 7.9L19 22h-3l-2.6-4H12v4H9zm3-6.6h2.6a1.6 1.6 0 0 0 0-3.2H12z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
@@ -377,7 +382,7 @@ async function openApp(a){
 }
 $('#frameBack').onclick = ()=>{ $('#frameApp').src='about:blank'; history.replaceState(null,'',location.pathname); show('shell'); renderHome(); if(state.savedSomething) askForPin(); };
 /* the apps tell the hub when they saved something; an open shop then gets asked for its PIN */
-window.addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.rw==='saved'){ state.savedSomething=true; if(!$('#frame').classList.contains('hidden')) setTimeout(askForPin, 400); } });
+window.addEventListener('message', e=>{ if(e.origin===location.origin && e.data && e.data.rw==='shop-changed'){ location.href=location.pathname; return; } if(e.origin===location.origin && e.data && e.data.rw==='saved'){ state.savedSomething=true; if(!$('#frame').classList.contains('hidden')) setTimeout(askForPin, 400); } });
 function askForPin(){
   const me=state.me; if(!me || !me.is_shop || me.shopAccess!=='open' || document.getElementById('pinSheet')) return;
   const nameIn=h('input',{ id:'pinName', placeholder:'Shop name, e.g. Yate Mini Market', value:me.shopHidden?'':me.shopName });
@@ -661,6 +666,7 @@ $('#themeBtn').onclick = flipTheme;
 $('#adminBtn').onclick = ()=> openAdmin();
 window.addEventListener('hashchange', ()=>{ if(!$('#shell').classList.contains('hidden') && state.me) routeHash(); });
 
+if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('/hub/sw.js').catch(()=>{});
 (async function init(){
   theme();
   try{ state.api = window.RW_API || await makeFirebaseApi(); await loadProfileAndRender(true); }

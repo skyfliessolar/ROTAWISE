@@ -1,0 +1,2 @@
+{"name":"Rotawise","short_name":"Rotawise","description":"Free apps for your shop: Gas Deliveries, Goods Orders with expiry dates, Documents.","start_url":"/hub/","scope":"/","display":"standalone","background_color":"#14273D","theme_color":"#14273D",
+"icons":[{"src":"/hub/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/hub/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}

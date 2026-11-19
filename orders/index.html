@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Goods Orders</title>
+<link rel="manifest" href="/hub/manifest.json">
+<link rel="apple-touch-icon" href="/hub/icon-180.png">
+<meta name="theme-color" content="#14273D">
 <meta name="theme-color" content="#14273D">
 <style>
 :root{--navy:#14273D;--ink:#14273D;--muted:#5b6b7f;--line:#e4e9f0;--bg:#eef1f6;--card:#fff;--accent:#2b5ce6;--good:#1f9d61;--bad:#d8453c;--warn:#a8610c;--warnbg:#fff4e0;--soft:#f3f6fb;--r:14px;--sh:0 1px 2px rgba(20,39,61,.06),0 6px 18px rgba(20,39,61,.07)}
@@ -39,6 +42,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .pic{width:64px;height:44px;border-radius:8px;object-fit:cover;background:var(--soft);border:1px solid var(--line);flex:none;cursor:zoom-in}
 .photobtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.fl{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:600}.fl input,.fl select{font-weight:400;color:var(--ink)}
+.phw{position:relative;flex:0 0 auto;cursor:pointer}.ptag{position:absolute;left:2px;bottom:2px;right:2px;background:#ffeb3b;color:#000;font:800 11px/1.2 system-ui,sans-serif;padding:2px 4px;border-radius:4px;display:flex;flex-wrap:wrap;gap:2px;align-items:baseline;pointer-events:none}.ptag.red{background:#d32f2f;color:#fff}.ptag s{opacity:.8;font-weight:600}.ptag i{font-style:normal;flex-basis:100%}
+.exp-photo{position:relative}.exp-photo .ptag{left:8px;bottom:8px;right:auto;font-size:15px}.pcts{display:flex;gap:6px;margin-top:8px}.pcts .on{background:var(--accent);color:#fff}.ofprev{display:flex;gap:10px;align-items:center;margin-top:10px;font-size:13px;color:var(--muted)}
+.shopbtn{margin-left:auto;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:6px 12px;font:600 13px inherit;color:inherit;cursor:pointer;max-width:55vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.shopchooser{display:flex;flex-direction:column;gap:8px}.shoprow{display:flex;justify-content:space-between;align-items:center;gap:8px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;color:inherit;cursor:pointer}.shoprow small{color:var(--muted)}
+.nsopt{display:flex;gap:10px;align-items:flex-start;border:2px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;margin-top:6px}.nsopt.on{border-color:var(--accent)}.nsopt input{width:18px;height:18px;flex:0 0 18px;margin-top:2px;accent-color:var(--accent)}.nsopt span{display:flex;flex-direction:column;gap:2px;flex:1}.nsopt small{color:var(--muted);font-size:12.5px}.err{color:#b11;font-size:13px;margin-top:6px}.err.hidden{display:none}
 .row.exp{flex-wrap:wrap}.row.exp .nm{flex:1 1 160px;min-width:0}@media(max-width:560px){.row.exp .expbtns{flex-basis:100%;justify-content:flex-end}}.row.exp.remove{border-left:4px solid #d33}.row.exp.reduce{border-left:4px solid #e08a00}.row.exp.done{opacity:.6}
 .expbtns{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}.tag.bad{background:#fde2e2;color:#a11}.tag.warn{background:#fff1d6;color:#8a5300}.tag.soon{background:#fff7c2;color:#6b5600}.tag.info{background:#e0ecff;color:#1d4ed8}.tag.muted{background:var(--line);color:var(--muted)}
 .card h2 .cnt{background:var(--accent);color:#fff;border-radius:99px;font-size:12px;padding:1px 8px;vertical-align:middle}.cnt.bad{background:#d33}.card.urgent{border-color:#f3b0b0}.bad-t{color:#b11}.warn-t{color:#a36200}.exp-photo{height:170px;border-radius:12px;background:var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);margin-bottom:8px}.exp-photo img{max-height:100%;max-width:100%}
@@ -98,7 +106,7 @@ label.l{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:1
 </head>
 <body>
 <script>if(window.parent!==window){try{if(window.parent.location.origin===location.origin)document.documentElement.classList.add('embed')}catch(e){}}</script>
-<div class="top"><h1>Goods Orders</h1><select id="storeSel" aria-label="Store"></select></div>
+<div class="top"><h1>Goods Orders</h1><button class="shopbtn hidden" id="shopBtn" type="button" aria-label="Change shop"></button><select id="storeSel" aria-label="Store"></select></div>
 <div class="tabs" id="tabs"></div>
 <main id="main"><div class="empty">Loading…</div></main>
 <div class="basket hidden" id="basketBar"><div class="in"><div><b id="basketCount"></b><div class="note" style="margin:0">Check it, then send it to your manager.</div></div><button class="btn" id="basketGo">Review &amp; submit</button></div></div>
@@ -110,7 +118,7 @@ const $=s=>document.querySelector(s);
 function h(tag,attrs,...kids){const el=document.createElement(tag);if(attrs)for(const k in attrs){const v=attrs[k];if(v==null||v===false)continue;if(k==='class')el.className=v;else if(k==='html')el.innerHTML=v;else if(k==='style'&&typeof v==='object')Object.assign(el.style,v);else if(k.slice(0,2)==='on'&&typeof v==='function')el.addEventListener(k.slice(2).toLowerCase(),v);else if(k==='value')el.value=v;else if(k==='checked')el.checked=!!v;else el.setAttribute(k,v===true?'':v)}for(const c of kids.flat(3)){if(c==null||c===false)continue;el.append(c.nodeType?c:document.createTextNode(c))}return el}
 function flash(m){const f=$('#flash');f.textContent=m;f.classList.add('show');clearTimeout(flash.t);flash.t=setTimeout(()=>f.classList.remove('show'),2200)}
 const fmt=n=>{n=Number(n||0);return Number.isInteger(n)?String(n):n.toFixed(2).replace(/0+$/,'').replace(/\.$/,'')};
-const money=n=>n==null||n===''?'':'£'+Number(n).toFixed(2);
+const money=n=>n==null||n===''||isNaN(n)?'':'£'+Number(n).toFixed(2);
 const label=it=>it.name+(it.size?' '+it.size:'');
 const when=iso=>{const d=new Date(iso);return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})};
 
@@ -118,7 +126,7 @@ const when=iso=>{const d=new Date(iso);return d.toLocaleDateString('en-GB',{day:
    Data lives in hub_shops/<space>/go_*: a shop's own space, or 'main' for the business. */
 async function makeApi(){
   const rw=await import('/fb/rw.js');
-  const w=await rw.whoami(); if(!w||w.kind==='off')return {me:async()=>null};
+  const w=await rw.whoami(); if(!w||w.kind==='off')return {me:async()=>null,rw,who:null};
   // the admin, or a manager the admin assigned, opening a free shop from Rotawise: …/orders/?space=<shop>
   const want=new URLSearchParams(location.search).get('space');let visit=null;
   if(want&&want!==w.space&&/^[a-z0-9]{6,30}$/.test(want)&&(w.kind==='admin'||w.kind==='staff')){visit=await rw.getShop(want);if(!visit)throw new Error('That shop does not exist any more')}
@@ -128,6 +136,7 @@ async function makeApi(){
   const mine=async(c,store)=>(await sp.where(c,'store_id',store));
   const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined)r[k]=o[k];return r};
   return {
+    rw,who:w,visit,
     async me(){
       if(visit)return {id:w.uid,name:w.name,employee_code:w.code||'admin',is_admin:w.admin,is_manager:true,store_id:'main',visiting:true,shopName:visit.name};
       if(w.kind==='shop')return {id:w.uid,name:'',employee_code:'shop',shared:true,is_manager:true,store_id:'main',shopName:w.name};
@@ -536,7 +545,21 @@ async function readDateFromPhoto(file){
   const u=URL.createObjectURL(file),im=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u});
   const k=Math.min(1,1600/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);
   const w=await Tesseract.createWorker('eng',1,{workerPath:OCR+'worker.min.js',corePath:OCR,langPath:OCR,gzip:true});
-  try{const r=await w.recognize(c);return findLabelDate(r.data.text)}finally{await w.terminate()}
+  try{const r=await w.recognize(c),t=r.data.text,d=findLabelDate(t);return d?{...d,price:findLabelPrice(t)}:(findLabelPrice(t)!=null?{date:null,price:findLabelPrice(t)}:null)}finally{await w.terminate()}
+}
+/* a shelf price on the pack or label: £1.25, £ 1,25, 89p */
+function findLabelPrice(text){
+  const t=String(text||'').replace(/[|]/g,'1');let m=/£\s?(\d{1,3})[.,](\d{2})(?!\d)/.exec(t);if(m)return Number(m[1]+'.'+m[2]);
+  m=/(?:^|[^\d.])(\d{1,2})\s?p(?![a-z])/i.exec(t);if(m)return Number(m[1])/100;return null;
+}
+const offerText=e=>e.offer_text||(e.offer_pct?e.offer_pct+'% off':'');
+/* the price sticker shown on the photo */
+function priceTag(e){
+  if(e.reduced_at&&(e.reduced_price!=null||offerText(e)))return h('span',{class:'ptag red'},e.price!=null&&e.reduced_price!=null?h('s',null,money(e.price)):null,e.reduced_price!=null?' '+money(e.reduced_price):'',offerText(e)?h('i',null,offerText(e)):null);
+  return e.price!=null?h('span',{class:'ptag'},money(e.price)):null;
+}
+function expPhoto(e,onclick){
+  return e.photo?h('div',{class:'phw',onclick},h('img',{class:'pic',src:e.photo,alt:e.name}),priceTag(e)):h('div',{class:'phw'},h('button',{class:'pic none',type:'button',onclick},'+ photo'),priceTag(e));
 }
 
 function expSheet(e){
@@ -545,7 +568,7 @@ function expSheet(e){
   const opts=[...new Set([...S.items.map(label),...S.catalog.map(c=>c.name+(c.size?' '+c.size:''))])].sort();
   const dl=h('datalist',{id:'expNames'},opts.map(o=>h('option',{value:o})));
   const photoBox=h('div',{class:'exp-photo'});
-  const showPhoto=()=>photoBox.replaceChildren(e.photo?h('img',{src:e.photo,alt:''}):h('span',null,'No photo yet'));showPhoto();
+  const showPhoto=()=>photoBox.replaceChildren(e.photo?h('img',{src:e.photo,alt:''}):h('span',null,'No photo yet'),priceTag(e)||'');showPhoto();
   const found=h('div',{class:'note',id:'expFound'});
   const name=h('input',{id:'expName',list:'expNames',placeholder:'Product, e.g. Coca-Cola 500ml',value:e.name,autocomplete:'off'});
   const qty=h('input',{id:'expQty',type:'number',min:'1',step:'1',value:e.qty==null?'':e.qty});
@@ -554,6 +577,7 @@ function expSheet(e){
   const mChk=h('input',{type:'checkbox',id:'expMonthOnly',checked:monthOnly});
   const rIn=h('input',{id:'expReduce',type:'datetime-local',value:e.reduce_at||''});
   const note=h('input',{id:'expNote',placeholder:'Shelf, aisle or anything else (optional)',value:e.note||''});
+  const priceIn=h('input',{id:'expPrice',type:'number',min:'0',step:'0.01',inputmode:'decimal',placeholder:'e.g. 1.25',value:e.price==null?'':e.price});
   const shared=!!(S.me.shared||S.me.is_shop);let myName='';try{myName=localStorage.getItem('go_name')||''}catch(er){}
   const who=shared&&isNew?h('input',{id:'expWho',placeholder:'Your name',value:myName,autocomplete:'name'}):null;
   const dateBox=h('div');
@@ -561,19 +585,22 @@ function expSheet(e){
   const sync=()=>{dateBox.replaceChildren(monthOnly?mIn:dIn);const x=expiry();if(x&&!reduceTouched)rIn.value=defReduce(x)};
   dIn.oninput=sync;mIn.oninput=sync;mChk.onchange=()=>{monthOnly=mChk.checked;if(monthOnly&&dIn.value)mIn.value=dIn.value.slice(0,7);else if(!monthOnly&&mIn.value)dIn.value=lastOfMonth(mIn.value);sync()};
   rIn.oninput=()=>{reduceTouched=true};sync();
+  priceIn.oninput=()=>{e.price=priceIn.value===''?null:Number(priceIn.value);showPhoto()};
   const pick=capture=>{const inp=h('input',{type:'file',accept:'image/*',capture:capture?'environment':null,style:{display:'none'},onchange:async ev=>{const f=ev.target.files[0];inp.remove();if(!f)return;
     file=f;try{e.photo=await shrinkPhoto(f);showPhoto()}catch(er){flash(er.message);return}
     found.textContent='Reading the date on the pack…';
     try{const r=await readDateFromPhoto(f);
-      if(r&&!expiry()){monthOnly=r.monthOnly;mChk.checked=monthOnly;if(monthOnly)mIn.value=r.date.slice(0,7);else dIn.value=r.date;sync();found.textContent='Found '+(r.monthOnly?'end of '+new Date(r.date).toLocaleDateString('en-GB',{month:'long',year:'numeric'}):dmy(r.date))+' on the pack. Check it is right.'}
-      else found.textContent=r?'The pack says '+dmy(r.date)+'.':'Could not read a date. Type it in.'}catch(er){found.textContent='Type the date in.'}}});
+      if(r&&r.price!=null&&priceIn.value===''){priceIn.value=r.price.toFixed(2);e.price=r.price;showPhoto()}
+      if(r&&r.date&&!expiry()){monthOnly=r.monthOnly;mChk.checked=monthOnly;if(monthOnly)mIn.value=r.date.slice(0,7);else dIn.value=r.date;sync();found.textContent='Found '+(r.monthOnly?'end of '+new Date(r.date).toLocaleDateString('en-GB',{month:'long',year:'numeric'}):dmy(r.date))+' on the pack. Check it is right.'}
+      else found.textContent=r&&r.date?'The pack says '+dmy(r.date)+'.':'Could not read a date. Type it in.';
+      if(r&&r.price!=null)found.textContent+=' Price on the label: '+money(r.price)+'.'}catch(er){found.textContent='Type the date in.'}}});
     document.body.append(inp);inp.click()};
   const m=h('div',{class:'modal',onclick:ev=>{if(ev.target===m)m.remove()}},h('div',{class:'sheet'},
     h('h2',{style:{marginTop:0}},isNew?'Add an expiry date':'Change '+e.name),
     photoBox,h('div',{class:'photobtns'},h('button',{class:'btn',id:'expTake',onclick:()=>pick(true)},'Take a photo'),h('button',{class:'btn alt',id:'expUpload',onclick:()=>pick(false)},'Upload'),
       e.photo?h('button',{class:'btn alt',onclick:()=>{e.photo=null;showPhoto()}},'Remove photo'):null),found,
     h('label',{class:'fl'},'Product',name,dl),
-    h('div',{class:'grid2'},h('label',{class:'fl'},'How many',qty),h('label',{class:'fl'},'Expires',dateBox)),
+    h('div',{class:'grid2'},h('label',{class:'fl'},'How many',qty),h('label',{class:'fl'},'Expires',dateBox),h('label',{class:'fl'},'Shelf price £',priceIn)),
     h('label',{class:'chkrow'},mChk,' Only the month is on the pack (e.g. "BBE MAR 2027")'),
     h('label',{class:'fl'},'Reduce the price on',rIn,h('small',{style:{fontWeight:400}},expDays()+' days before it expires, unless you pick another date and time.')),
     h('label',{class:'fl'},'Note',note),
@@ -585,7 +612,7 @@ function expSheet(e){
         if(who){try{localStorage.setItem('go_name',who.value.trim())}catch(er){}}
         if(!n)return flash('Type the product');if(!x)return flash('Pick the expiry date');
         const it=S.items.find(i=>label(i).toLowerCase()===n.toLowerCase()),c=!it&&S.catalog.find(c=>(c.name+(c.size?' '+c.size:'')).toLowerCase()===n.toLowerCase());
-        const row={store_id:S.store,name:n,qty:qty.value===''?null:Math.max(1,Math.round(Number(qty.value))),expiry:x,month_only:monthOnly,reduce_at:rIn.value||defReduce(x),note:note.value.trim()||null,
+        const row={store_id:S.store,name:n,qty:qty.value===''?null:Math.max(1,Math.round(Number(qty.value))),expiry:x,month_only:monthOnly,reduce_at:rIn.value||defReduce(x),note:note.value.trim()||null,price:priceIn.value===''?null:Math.round(Number(priceIn.value)*100)/100,
           photo:e.photo||(it&&it.photo)||(c&&c.photo)||null,item_id:it?it.id:null,code:(it&&it.code)||(c&&c.code)||null};
         ev.target.disabled=true;
         try{if(isNew){row.status='open';row.created_at=new Date().toISOString();row.created_by=S.me.id;row.created_by_name=(who&&who.value.trim())||S.me.name||null;S.exp.push(await S.api.addExpiry(row))}
@@ -595,26 +622,47 @@ function expSheet(e){
       h('button',{class:'btn alt',onclick:()=>m.remove()},'Cancel'))));
   document.body.append(m);
 }
+/* reduce the price: a new price, a % off, or an offer like "2 for £1" */
+function offerSheet(e){return new Promise(res=>{
+  const was=h('input',{id:'ofWas',type:'number',min:'0',step:'0.01',inputmode:'decimal',value:e.price==null?'':e.price,placeholder:'e.g. 1.50'});
+  const now=h('input',{id:'ofNow',type:'number',min:'0',step:'0.01',inputmode:'decimal',value:e.reduced_price==null?'':e.reduced_price,placeholder:'e.g. 0.75'});
+  const txt=h('input',{id:'ofText',placeholder:'or an offer, e.g. 2 for £1, Half price',value:e.offer_text||''});
+  let pct=e.offer_pct||null;
+  const pctBtns=h('div',{class:'pcts'},[25,50,75].map(p=>h('button',{class:'btn alt sm'+(pct===p?' on':''),'data-pct':p,onclick:()=>{pct=p;pctBtns.querySelectorAll('button').forEach(b=>b.classList.toggle('on',Number(b.dataset.pct)===p));
+    if(was.value!=='')now.value=(Math.round(Number(was.value)*(100-p))/100).toFixed(2);preview()}},p+'% off')));
+  const pv=h('div',{class:'ofprev'});
+  const preview=()=>{const x={...e,price:was.value===''?null:Number(was.value),reduced_at:'x',reduced_price:now.value===''?null:Number(now.value),offer_pct:pct,offer_text:txt.value.trim()||null};pv.replaceChildren(expPhoto(x),h('span',null,'This is how the photo will show it.'))};
+  [was,now,txt].forEach(i=>i.oninput=()=>{if(i===now)pct=null;preview()});
+  const close=v=>{m.remove();res(v)};
+  const m=h('div',{class:'modal',id:'offerSheet',onclick:ev=>{if(ev.target===m)close(null)}},h('div',{class:'sheet'},
+    h('h2',{style:{marginTop:0}},'Reduce '+e.name),
+    h('div',{class:'grid2'},h('label',{class:'fl'},'Was £',was),h('label',{class:'fl'},'Now £',now)),pctBtns,
+    h('label',{class:'fl',style:{marginTop:'10px'}},'Offer',txt),pv,
+    h('div',{class:'photobtns',style:{marginTop:'12px'}},
+      h('button',{class:'btn',id:'ofSave',onclick:()=>close({price:was.value===''?null:Math.round(Number(was.value)*100)/100,reduced_price:now.value===''?null:Math.round(Number(now.value)*100)/100,offer_pct:pct,offer_text:txt.value.trim()||null})},'Save the offer'),
+      h('button',{class:'btn alt',onclick:()=>close(null)},'Cancel'))));
+  document.body.append(m);preview();setTimeout(()=>(was.value===''?was:now).focus(),50);
+})}
 async function expMark(e,kind){
   const patch={};
-  if(kind==='reduced'){const p=prompt('New price for '+e.name+' (optional), e.g. 0.50','');if(p===null)return;patch.reduced_at=nowStr();patch.reduced_price=p.trim()===''?null:Number(String(p).replace(/[£,]/g,''))||null}
+  if(kind==='reduced'){const o=await offerSheet(e);if(!o)return;Object.assign(patch,o,{reduced_at:nowStr()})}
   else if(kind==='removed'){patch.removed_at=nowStr();patch.status='done'}
-  else if(kind==='undo'){Object.assign(patch,{removed_at:null,status:'open',reduced_at:null,reduced_price:null})}
+  else if(kind==='undo'){Object.assign(patch,{removed_at:null,status:'open',reduced_at:null,reduced_price:null,offer_pct:null,offer_text:null})}
   try{await S.api.updateExpiry(e.id,patch);Object.assign(e,patch);flash(kind==='undo'?'Back on the list':kind==='removed'?'Taken off the shelf':'Marked as reduced');document.querySelectorAll('#expAlert [data-exp="'+e.id+'"]').forEach(r=>r.replaceWith(expRow(e)));render()}catch(er){flash('Not saved: '+er.message)}
 }
 function expRow(e){
   const s=expState(e),d=daysTo(e.expiry);
-  const tag={remove:['Take off the shelf','bad'],reduce:['Reduce the price now','warn'],reduced:['Reduced'+(e.reduced_price!=null?' to £'+Number(e.reduced_price).toFixed(2):''),'info'],
+  const tag={remove:['Take off the shelf','bad'],reduce:['Reduce the price now','warn'],reduced:['Reduced'+(e.reduced_price!=null?' to '+money(e.reduced_price):'')+(offerText(e)?' · '+offerText(e):''),'info'],
     month:[d===0?'Expires today':'Expires in '+d+(d===1?' day':' days'),'soon'],later:['Expires in '+d+' days','muted'],done:['Taken off '+dmy(e.removed_at),'muted']}[s];
   return h('div',{class:'row exp '+s,'data-exp':e.id},
-    e.photo?h('img',{class:'pic',src:e.photo,alt:e.name,onclick:()=>expSheet(e)}):h('button',{class:'pic none',type:'button',onclick:()=>expSheet(e)},'+ photo'),
+    expPhoto(e,()=>expSheet(e)),
     h('div',{class:'nm',style:{cursor:'pointer'},onclick:()=>expSheet(e)},h('b',null,e.name,e.qty>1?' × '+e.qty:''),
       h('small',null,(e.month_only?'End of '+new Date(e.expiry+'T12:00').toLocaleDateString('en-GB',{month:'short',year:'numeric'}):'Expires '+dmy(e.expiry))+
         (!['done','remove'].includes(s)&&!e.reduced_at&&e.reduce_at?' · reduce '+dmyt(e.reduce_at):'')+(e.note?' · '+e.note:'')+(e.created_by_name?' · '+e.created_by_name:'')),
       h('span',{class:'tag '+tag[1]},tag[0])),
     h('div',{class:'expbtns'},
       s==='done'?h('button',{class:'btn alt sm','data-act':'undo',onclick:()=>expMark(e,'undo')},'Undo'):[
-        s!=='reduced'&&s!=='remove'?h('button',{class:'btn '+(s==='reduce'?'':'alt ')+'sm','data-act':'reduced',onclick:()=>expMark(e,'reduced')},'Reduced'):null,
+        s!=='remove'?h('button',{class:'btn '+(s==='reduce'?'':'alt ')+'sm','data-act':'reduced',onclick:()=>expMark(e,'reduced')},s==='reduced'?'Change offer':'Reduce / offer'):null,
         h('button',{class:'btn '+(s==='remove'?'':'alt ')+'sm','data-act':'removed',onclick:()=>expMark(e,'removed')},'Off shelf')]));
 }
 function viewExpiry(){
@@ -626,7 +674,9 @@ function viewExpiry(){
   const cfg=(S.expCfg[S.store]=S.expCfg[S.store]||{});
   return h('div',null,
     h('div',{class:'bar',style:{marginTop:0}},h('button',{class:'btn',id:'expAdd',onclick:()=>expSheet()},'+ Add an expiry date'),
-      all.length?h('button',{class:'btn alt',onclick:printExpiry},'Print'):null),
+      all.length?h('button',{class:'btn alt',onclick:printExpiry},'Print'):null,
+      all.length&&isMgr()?h('button',{class:'btn alt',id:'expPdf',onclick:()=>downloadReport('pdf')},'Download PDF'):null,
+      all.length&&isMgr()?h('button',{class:'btn alt',id:'expImg',onclick:()=>downloadReport('jpg')},'Download picture'):null),
     !all.length?h('div',{class:'card'},h('h2',null,'Never sell out-of-date stock'),h('p',{class:'note'},'Take a photo of the product and its date. Rotawise reminds you to reduce the price '+expDays()+' days before it expires, and to take it off the shelf when it does, every time you open this shop, and by email.')):null,
     sec('Do this now',now,'urgent'),sec('Expiring this month',soon),sec('Later',later),
     done.length?h('details',{class:'card'},h('summary',null,'Taken off the shelf (last 30 days): '+done.length),done.map(expRow)):null,
@@ -645,6 +695,64 @@ function printExpiry(){
     rows.map(e=>'<tr><td>'+(e.photo?'<img src="'+e.photo+'">':'')+'</td><td>'+e.name.replace(/</g,'&lt;')+'</td><td>'+(e.qty||'')+'</td><td>'+dmy(e.expiry)+'</td><td>'+(e.reduced_at?'done':dmyt(e.reduce_at))+'</td><td>'+({remove:'TAKE OFF',reduce:'REDUCE NOW',reduced:'Reduced',month:'This month',later:''}[expState(e)])+'</td></tr>').join('')+'</table>');
   w.document.close();setTimeout(()=>w.print(),300);
 }
+/* ---- one file with every expiry entry: photo, price/offer, dates, who added it (for keeping) ---- */
+function loadImg(src){return new Promise(r=>{if(!src)return r(null);const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src})}
+async function reportRows(){
+  const list=S.exp.slice().sort((a,b)=>a.expiry.localeCompare(b.expiry));
+  return Promise.all(list.map(async e=>({e,img:await loadImg(e.photo)})));
+}
+function drawCard(x,c,y,W){
+  const {e,img}=c,P=150;x.fillStyle='#fff';x.fillRect(40,y,W-80,P+30);x.strokeStyle='#d9dde3';x.lineWidth=2;x.strokeRect(40,y,W-80,P+30);
+  x.fillStyle='#eef0f3';x.fillRect(55,y+15,P,P);
+  if(img){const k=Math.max(P/img.width,P/img.height),w=img.width*k,hh=img.height*k;x.save();x.beginPath();x.rect(55,y+15,P,P);x.clip();x.drawImage(img,55+(P-w)/2,y+15+(P-hh)/2,w,hh);x.restore()}
+  else{x.fillStyle='#9aa1ab';x.font='600 20px system-ui,sans-serif';x.fillText('No photo',80,y+95)}
+  const tag=e.reduced_at&&(e.reduced_price!=null||offerText(e))?(e.reduced_price!=null?money(e.reduced_price):'')+(offerText(e)?' '+offerText(e):''):money(e.price);
+  if(tag){x.font='800 20px system-ui,sans-serif';const tw=x.measureText(tag).width+14;x.fillStyle=e.reduced_at?'#d32f2f':'#ffeb3b';x.fillRect(58,y+P-17,Math.min(tw,P-6),28);x.fillStyle=e.reduced_at?'#fff':'#000';x.fillText(tag,65,y+P+4,P-20)}
+  const s=expState(e),st={remove:'TAKE OFF THE SHELF',reduce:'REDUCE NOW',reduced:'REDUCED',month:'THIS MONTH',later:'',done:'OFF THE SHELF'}[s];
+  const tx=230;x.fillStyle='#111';x.font='700 30px system-ui,sans-serif';x.fillText(e.name+(e.qty>1?' × '+e.qty:''),tx,y+50,W-tx-60);
+  x.font='22px system-ui,sans-serif';x.fillStyle='#333';
+  const L=[(e.month_only?'Best before end ':'Expires ')+dmy(e.expiry)+(e.price!=null?'   ·   Price '+money(e.price):''),
+    e.reduced_at?'Reduced '+dmyt(e.reduced_at)+(e.reduced_price!=null?' to '+money(e.reduced_price):'')+(offerText(e)?' · '+offerText(e):''):(e.reduce_at?'Reduce on '+dmyt(e.reduce_at):''),
+    (e.removed_at?'Taken off the shelf '+dmyt(e.removed_at):'Still on the shelf')+(e.created_by_name?'   ·   Added by '+e.created_by_name:'')];
+  L.filter(Boolean).forEach((t,i)=>x.fillText(t,tx,y+88+i*32,W-tx-60));
+  if(st){x.font='700 18px system-ui,sans-serif';const w=x.measureText(st).width+20;x.fillStyle={remove:'#fde2e2',reduce:'#fff1d6',reduced:'#e0ecff',month:'#fff7c2',done:'#e8eaed'}[s];x.fillRect(W-60-w,y+18,w,30);x.fillStyle={remove:'#a11',reduce:'#8a5300',reduced:'#1d4ed8',month:'#6b5600',done:'#555'}[s];x.fillText(st,W-50-w,y+40)}
+}
+function reportHead(x,W,page,pages){
+  x.fillStyle='#111';x.font='800 40px system-ui,sans-serif';x.fillText('Expiry dates · '+storeName(),40,70,W-80);
+  x.font='22px system-ui,sans-serif';x.fillStyle='#555';x.fillText('Saved '+dmyt(nowStr())+(pages>1?'   ·   page '+page+' of '+pages:''),40,108);
+}
+function pageCanvases(rows,perPage,W,H){
+  const pages=Math.max(1,Math.ceil(rows.length/perPage)),out=[];
+  for(let p=0;p<pages;p++){const part=rows.slice(p*perPage,(p+1)*perPage),hh=H||(150+part.length*200+40);
+    const c=document.createElement('canvas');c.width=W;c.height=hh;const x=c.getContext('2d');x.fillStyle='#f5f6f8';x.fillRect(0,0,W,hh);
+    reportHead(x,W,p+1,pages);part.forEach((r,i)=>drawCard(x,r,150+i*200,W));out.push(c)}
+  return out;
+}
+const toJpeg=c=>new Promise(r=>c.toBlob(r,'image/jpeg',0.85));
+/* a small PDF writer: one JPEG per A4 page */
+async function jpegsToPdf(canvases){
+  const enc=new TextEncoder(),parts=[],offs=[];let len=0;const push=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);len+=b.length};
+  const n=canvases.length,kids=[];for(let i=0;i<n;i++)kids.push((3+i*3)+' 0 R');
+  push('%PDF-1.4\n');
+  const obj=(id,body)=>{offs[id]=len;push(id+' 0 obj\n');if(typeof body==='string')push(body);else body();push('\nendobj\n')};
+  obj(1,'<< /Type /Catalog /Pages 2 0 R >>');obj(2,'<< /Type /Pages /Kids ['+kids.join(' ')+'] /Count '+n+' >>');
+  for(let i=0;i<n;i++){const c=canvases[i],jpg=new Uint8Array(await (await toJpeg(c)).arrayBuffer()),pw=595.28,ph=pw*c.height/c.width,pid=3+i*3;
+    obj(pid,'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pw.toFixed(2)+' '+ph.toFixed(2)+'] /Resources << /XObject << /Im'+i+' '+(pid+2)+' 0 R >> >> /Contents '+(pid+1)+' 0 R >>');
+    const cs='q '+pw.toFixed(2)+' 0 0 '+ph.toFixed(2)+' 0 0 cm /Im'+i+' Do Q';obj(pid+1,'<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream');
+    obj(pid+2,()=>{push('<< /Type /XObject /Subtype /Image /Width '+c.width+' /Height '+c.height+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jpg.length+' >>\nstream\n');push(jpg);push('\nendstream')})}
+  const total=3+n*3,x=len;let xr='xref\n0 '+total+'\n0000000000 65535 f \n';for(let i=1;i<total;i++)xr+=String(offs[i]).padStart(10,'0')+' 00000 n \n';
+  push(xr+'trailer\n<< /Size '+total+' /Root 1 0 R >>\nstartxref\n'+x+'\n%%EOF');
+  return new Blob(parts,{type:'application/pdf'});
+}
+function saveBlob(b,name){const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),30000)}
+async function downloadReport(kind){
+  flash('Making the file…');const rows=await reportRows();if(!rows.length)return flash('Nothing to save yet');
+  const base=('Expiry '+storeName()+' '+todayStr()).replace(/[\\/:*?"<>|]+/g,' ');
+  try{
+    if(kind==='pdf'){saveBlob(await jpegsToPdf(pageCanvases(rows,8,1240,1754)),base+'.pdf')}
+    else{const cs=pageCanvases(rows,60,1240);for(let i=0;i<cs.length;i++)saveBlob(await toJpeg(cs[i]),base+(cs.length>1?' part '+(i+1):'')+'.jpg')}
+    flash('Saved')}catch(e){flash('Could not make the file: '+e.message)}
+}
 /* opening the shop: tell them straight away what needs doing */
 function expiryAlert(){
   const due=expDue();if(!due.length)return;
@@ -660,14 +768,68 @@ function expiryAlert(){
   document.body.append(m);
 }
 
+/* ---------------- shops: switch shop, add a shop (name, with or without a PIN) ---------------- */
+function setShopBtn(t){const b=$('#shopBtn');if(!b)return;b.textContent=t+' ▾';b.classList.remove('hidden');b.onclick=openShopSheet}
+function afterShopChange(url){try{if(parent!==window){parent.postMessage({rw:'shop-changed'},location.origin)}}catch(e){}location.href=url||location.pathname}
+function askShopPin(name){return new Promise(res=>{const inp=h('input',{id:'spPin',type:'password',autocomplete:'off',placeholder:'Shop PIN'});
+  const done=v=>{m.remove();res(v)};const m=h('div',{class:'modal'},h('div',{class:'sheet'},h('h2',{style:{marginTop:0}},name),h('p',{class:'note'},'Type the shop PIN. You only need to do this once on this phone.'),inp,
+    h('div',{class:'photobtns'},h('button',{class:'btn',id:'spOk',onclick:()=>done(inp.value.trim()||null)},'Open'),h('button',{class:'btn alt',onclick:()=>done(null)},'Cancel'))));
+  inp.onkeydown=e=>{if(e.key==='Enter')done(inp.value.trim()||null)};document.body.append(m);setTimeout(()=>inp.focus(),50)})}
+function shopChooser(){
+  const rw=S.api.rw,who=S.api.who,box=h('div',{class:'shopchooser'},h('div',{class:'spin'}));
+  const err=h('div',{class:'err hidden'});const bad=t=>{err.textContent=t;err.classList.remove('hidden')};
+  (async()=>{
+    let rows=[];
+    if(who&&(who.kind==='admin'||who.kind==='staff')){
+      const mine=await rw.myShops(who).catch(()=>[]);
+      rows.push(h('button',{class:'shoprow','data-shop':'',onclick:()=>afterShopChange(location.pathname)},h('b',null,'Your business stores'),h('small',null,'Your own login')));
+      rows=rows.concat(mine.map(sh=>h('button',{class:'shoprow','data-shop':sh.id,onclick:()=>afterShopChange(location.pathname+'?space='+sh.id)},h('b',null,sh.name),h('small',null,(sh.access==='open'?'Open':'PIN')+(sh.hidden?' · hidden':'')))));
+    }else{
+      const list=await rw.listShops().catch(()=>[]);
+      rows=list.map(sh=>h('button',{class:'shoprow','data-shop':sh.id,onclick:async()=>{
+        let pin;if(sh.access==='password'){pin=await askShopPin(sh.name);if(!pin)return}
+        const r=await rw.enterShop(sh.id,pin);if(r.error)return bad(r.error==='wrong'?'That shop PIN isn’t right.':r.error==='locked'?'This shop now has a PIN. Tap it again and type the PIN.':r.error);
+        try{localStorage.setItem('rw_shop',sh.id)}catch(e){}afterShopChange()}},h('b',null,sh.name),h('small',null,sh.access==='open'?'Open':'PIN')));
+    }
+    box.replaceChildren(...(rows.length?rows:[h('p',{class:'note'},'No shops yet. Add the first one.')]),err,
+      who&&(who.kind==='admin'||who.kind==='staff')?null:h('button',{class:'btn',id:'spAdd',style:{marginTop:'10px'},onclick:()=>addShopForm(box)},'+ Add shop'),
+      h('a',{class:'note',href:'../hub/',target:'_top',style:{display:'block',marginTop:'10px'}},'Staff or admin login: open Rotawise'));
+  })();
+  return box;
+}
+function addShopForm(box){
+  const rw=S.api.rw;let mode='open';
+  const nm=h('input',{id:'nsName',placeholder:'Shop name, e.g. Charfield Service Station'});
+  const pin=h('input',{id:'nsPw',inputmode:'numeric',autocomplete:'off',placeholder:'Shop PIN (at least 4 numbers or letters)'});
+  const pinBox=h('div',{class:'hidden',style:{marginTop:'8px'}},pin);
+  const opt=(k,t,sub)=>h('label',{class:'nsopt'+(k===mode?' on':''),'data-mode':k},h('input',{type:'radio',name:'nsMode',checked:k===mode,onchange:()=>{mode=k;box.querySelectorAll('.nsopt').forEach(x=>x.classList.toggle('on',x.dataset.mode===k));pinBox.classList.toggle('hidden',k!=='pin')}}),h('span',null,h('b',null,t),h('small',null,sub)));
+  const err=h('div',{class:'err hidden'});
+  box.replaceChildren(h('label',{class:'fl'},'Shop name',nm),h('div',{class:'fl',style:{marginTop:'10px'}},'How do people get in?'),
+    opt('open','Without a password','Anyone with the link can open it. You can add a PIN later.'),opt('pin','With a shop PIN','Only people who know the PIN can open it.'),pinBox,err,
+    h('div',{class:'photobtns'},h('button',{class:'btn',id:'nsGo',onclick:async ev=>{
+      const n=nm.value.trim(),pw=mode==='pin'?pin.value.trim():'';const bad=t=>{err.textContent=t;err.classList.remove('hidden')};
+      if(n.length<2)return bad('Type the shop name.');if(mode==='pin'&&pw.length<4)return bad('The shop PIN needs at least 4 numbers or letters.');
+      ev.target.disabled=true;ev.target.textContent='Adding…';
+      try{const r=await rw.createShop(n,pw||undefined);try{localStorage.setItem('rw_shop',r.id)}catch(e){}afterShopChange()}catch(e){ev.target.disabled=false;ev.target.textContent='Add shop';bad(e.message)}}},'Add shop')));
+  setTimeout(()=>nm.focus(),50);
+}
+function openShopSheet(){
+  const m=h('div',{class:'modal',id:'shopSheet',onclick:ev=>{if(ev.target===m)m.remove()}},h('div',{class:'sheet'},h('h2',{style:{marginTop:0}},'Shops'),shopChooser(),
+    S.me&&(S.me.shared||S.me.is_shop)?h('p',{class:'note'},'You are in '+(S.me.shopName||'this shop')+'. Picking another shop signs this phone out of it.'):null,
+    h('div',{class:'photobtns'},h('button',{class:'btn alt',onclick:()=>m.remove()},'Close'))));
+  document.body.append(m);
+}
+
 /* ---------------- boot ---------------- */
 (async function(){
   try{const t=localStorage.getItem('rw_theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}
   try{
     S.api=window.GO_API||await makeApi();
     S.me=await S.api.me();
-    if(!S.me){$('#tabs').replaceChildren();$('#main').replaceChildren(h('div',{class:'card'},h('h2',null,'Choose your shop first'),h('p',{class:'note'},'Goods Orders opens from Rotawise.'),h('a',{class:'btn',href:'../hub/',target:'_top',style:{display:'inline-block',textDecoration:'none'}},'Go to Rotawise')));return}
+    if(!S.me){$('#tabs').replaceChildren();if(S.api.rw){$('#main').replaceChildren(h('div',{class:'card'},h('h2',null,'Pick your shop'),h('p',{class:'note'},'Goods Orders is free for every shop. Open yours, or add it.'),shopChooser()));setShopBtn('Choose shop')}
+      else $('#main').replaceChildren(h('div',{class:'card'},h('h2',null,'Choose your shop first'),h('a',{class:'btn',href:'../hub/',target:'_top'},'Open Rotawise')));return}
     S.stores=await S.api.stores();
+    if(S.api.rw)setShopBtn(S.me.visiting?S.me.shopName:S.me.shared?S.me.shopName:'Your stores');
     if(S.me.visiting){const t=document.querySelector('.top h1');if(t)t.textContent='Goods Orders · '+S.me.shopName}
     const me=S.me, mine=new Set([me.store_id,...(me.extraStores||[]),...(me.managed||[])].filter(Boolean));
     let list=me.is_admin||me.allStores||me.shared?S.stores:S.stores.filter(s=>mine.has(s.id));
