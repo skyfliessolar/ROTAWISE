@@ -783,6 +783,7 @@ function shopChooser(){
     if(who&&(who.kind==='admin'||who.kind==='staff')){
       const mine=await rw.myShops(who).catch(()=>[]);
       rows.push(h('button',{class:'shoprow','data-shop':'',onclick:()=>afterShopChange(location.pathname)},h('b',null,'Your business stores'),h('small',null,'Your own login')));
+      if(!mine.length&&who.admin)rows.push(h('p',{class:'note'},'No separate shops yet. Add one below: each shop keeps its own orders, stock and expiry list.'));
       rows=rows.concat(mine.map(sh=>h('button',{class:'shoprow','data-shop':sh.id,onclick:()=>afterShopChange(location.pathname+'?space='+sh.id)},h('b',null,sh.name),h('small',null,(sh.access==='open'?'Open':'PIN')+(sh.hidden?' · hidden':'')))));
     }else{
       const list=await rw.listShops().catch(()=>[]);
@@ -792,7 +793,7 @@ function shopChooser(){
         try{localStorage.setItem('rw_shop',sh.id)}catch(e){}afterShopChange()}},h('b',null,sh.name),h('small',null,sh.access==='open'?'Open':'PIN')));
     }
     box.replaceChildren(...(rows.length?rows:[h('p',{class:'note'},'No shops yet. Add the first one.')]),err,
-      who&&(who.kind==='admin'||who.kind==='staff')?null:h('button',{class:'btn',id:'spAdd',style:{marginTop:'10px'},onclick:()=>addShopForm(box)},'+ Add shop'),
+      who&&who.kind==='staff'&&!who.admin?null:h('button',{class:'btn',id:'spAdd',style:{marginTop:'10px'},onclick:()=>addShopForm(box)},'+ Add shop'),
       h('a',{class:'note',href:'../hub/',target:'_top',style:{display:'block',marginTop:'10px'}},'Staff or admin login: open Rotawise'));
   })();
   return box;
@@ -810,7 +811,9 @@ function addShopForm(box){
       const n=nm.value.trim(),pw=mode==='pin'?pin.value.trim():'';const bad=t=>{err.textContent=t;err.classList.remove('hidden')};
       if(n.length<2)return bad('Type the shop name.');if(mode==='pin'&&pw.length<4)return bad('The shop PIN needs at least 4 numbers or letters.');
       ev.target.disabled=true;ev.target.textContent='Adding…';
-      try{const r=await rw.createShop(n,pw||undefined);try{localStorage.setItem('rw_shop',r.id)}catch(e){}afterShopChange()}catch(e){ev.target.disabled=false;ev.target.textContent='Add shop';bad(e.message)}}},'Add shop')));
+      // the admin keeps their own login and opens the new shop as admin; anyone else is signed into it
+      const asAdmin=!!(S.api.who&&S.api.who.admin);
+      try{const r=await rw.createShop(n,pw||undefined,{keepSession:asAdmin});if(asAdmin)return afterShopChange(location.pathname+'?space='+r.id);try{localStorage.setItem('rw_shop',r.id)}catch(e){}afterShopChange()}catch(e){ev.target.disabled=false;ev.target.textContent='Add shop';bad(e.message)}}},'Add shop')));
   setTimeout(()=>nm.focus(),50);
 }
 function openShopSheet(){
