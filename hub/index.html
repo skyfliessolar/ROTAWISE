@@ -145,6 +145,9 @@ input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 
 #myShops .panel{margin-top:16px}
 .nsopts{display:flex;flex-direction:column;gap:8px;margin-top:6px}.nsopt{display:flex;gap:10px;align-items:flex-start;border:2px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}.nsopt.on{border-color:var(--accent)}.nsopt input{margin-top:3px;width:18px;height:18px;flex:0 0 18px;padding:0;accent-color:var(--accent)}.nsopt span{flex:1;text-align:left}.nsopt span{display:flex;flex-direction:column;gap:2px}.nsopt small{color:var(--muted);font-size:12.5px}
 .fl{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted)}.fl input{font-weight:400}.mbtn.accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pinlist{display:flex;flex-direction:column;gap:6px;margin:8px 0;max-height:40vh;overflow:auto}.pinrow{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px}.pinrow b{flex:1}.pinv{font-family:ui-monospace,monospace;color:var(--muted);letter-spacing:.08em}
+.pinadd{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:8px}@media(max-width:480px){.pinadd{grid-template-columns:1fr 1fr}.pinadd button{grid-column:1/-1}}
+#hello .who{font-weight:500;opacity:.75}
 </style>
 </head>
 <body>
@@ -244,7 +247,7 @@ async function makeFirebaseApi(){
   const toMe = w => {
     if(!w) return null;
     if(w.kind==='off') return { off:true };
-    if(w.kind==='shop') return { id:w.uid, is_shop:true, is_manager:true, shopId:w.shopId, shopName:w.name, shopAccess:w.access, shopHidden:w.hidden, name:w.name, apps:{ rota:1, gas:1, cash:1, orders:1, docs:1 } };
+    if(w.kind==='shop') return { person:rw.personName(), id:w.uid, is_shop:true, is_manager:true, shopId:w.shopId, shopName:w.name, shopAccess:w.access, shopHidden:w.hidden, name:w.name, apps:{ rota:1, gas:1, cash:1, orders:1, docs:1 } };
     if(w.kind==='admin') return { id:w.uid, is_admin:true, is_manager:true, name:'Admin', employee_code:'admin', email:w.email };
     const apps={}; for(const a of APPS) apps[a.key] = w.apps && a.key in w.apps ? !!w.apps[a.key] : DEFAULT_ON[a.key];
     return { id:w.uid, name:w.name, employee_code:w.code, is_admin:w.admin, is_manager:w.manager, role:w.role, apps };
@@ -260,6 +263,7 @@ async function makeFirebaseApi(){
       apps:Object.fromEntries(APPS.map(a=>[a.key, x.apps && a.key in x.apps ? !!x.apps[a.key] : DEFAULT_ON[a.key]])) })); },
     setStaffApps: rw.setStaffApps,
     setShopManagers: rw.setShopManagers, expiryDue: rw.expiryDue,
+    staffPins: rw.staffPins, addStaffPin: rw.addStaffPin, removeStaffPin: rw.removeStaffPin,
     async myShops(){ return rw.myShops(await rw.whoami()); }
   };
 }
@@ -318,7 +322,7 @@ function renderHome(){
   $('#logoutBtn').title = me.guest ? 'Pick a shop or sign in' : me.is_shop ? 'Switch shop' : 'Sign out';
   $('#adminBtn').title = me.is_shop ? 'Shop settings: name & password' : 'Admin: shops, people & access';
   $('#adminBtn').classList.toggle('hidden', !(me.is_admin || me.is_shop));
-  $('#hello').innerHTML = (me.guest ? 'Welcome to Rotawise' : me.is_shop ? esc(me.shopName) : 'Hi, '+esc(String(me.name||'').split(' ')[0]||me.employee_code)+'.')
+  $('#hello').innerHTML = (me.guest ? 'Welcome to Rotawise' : me.is_shop ? esc(me.shopName)+(me.person?' <span class="who">· '+esc(me.person)+'</span>':'') : 'Hi, '+esc(String(me.name||'').split(' ')[0]||me.employee_code)+'.')
     + '<small>'+esc(hint())+'</small>';
   const tiles = $('#tiles'); tiles.innerHTML='';
   const bn = $('#banner'); bn.replaceChildren(); bn.classList.add('hidden');
@@ -466,13 +470,14 @@ async function enterShop(sh, quiet){
   try{
     let typed;
     if(sh.access==='password'){
-      typed = await askText(sh.name, 'Type the shop PIN. You only need to do this once on this phone.', 'Shop PIN', 'password'); if(!typed) return;
+      typed = await askText(sh.name, 'Type your PIN. Your own PIN, or the shop PIN.', 'PIN', 'password'); if(!typed) return;
     }
     const r = await state.api.enterShop(sh.id, typed);
     if(r.error){ shopErr(r.error==='wrong' ? (sh.access==='password' ? 'That shop password isn’t right.' : 'This shop’s login changed. Pick it again.') : r.error==='locked' ? 'This shop now has a password. Pick it again and type the password.' : r.error);
       if(quiet) await showShops(false); return; }
     lsSet('rw_shop', sh.id);
     await loadProfileAndRender();
+    if(r.person) flash('Hi '+r.person);
   }catch(e){ shopErr('Couldn’t open the shop: '+e.message); }
 }
 function createShopSheet(fromAdmin){
@@ -524,7 +529,8 @@ async function shopSettings(){
       ? ['Password: ', h('b',{ id:'myPw' }, pw||'—'), '. Staff type it once on each phone. Your admin can always see it.']
       : 'Open: anyone with the link can open this shop and see its data. Add a password to keep it to your staff.'),
     h('div',{ class:'mactions' },
-      h('button',{ class:'mrow accent', id:'setPw', onclick:async()=>{ m.remove();
+      h('button',{ class:'mrow accent', id:'pinsBtn', onclick:()=>{ m.remove(); staffPinsSheet({ id:me.shopId, name:me.shopName, access:me.shopAccess }); } }, 'Employees & PINs'),
+      h('button',{ class:'mrow ghost', id:'setPw', onclick:async()=>{ m.remove();
         const v = await askText(me.shopAccess==='password'?'New shop password':'Add a shop password', 'At least 4 characters. Phones already in the shop will be asked for it within the hour.', 'Shop password');
         if(v==null) return; if(v.length<4){ flash('At least 4 characters'); return; }
         try{ await state.api.setShopAccess(me.shopId,'password',v); me.shopAccess='password'; flash('Password set'); renderHome(); }catch(e){ flash('Not saved: '+e.message); } } },
@@ -578,9 +584,43 @@ async function renderShopRows(){
         sh.access==='password' ? h('button',{ 'data-act':'open', onclick:()=>adminOpen(sh) }, 'Make open') : null,
         h('button',{ 'data-act':'rename', onclick:async()=>{ const v=await askText('Rename '+sh.name,null,'Shop name','text',sh.name); if(!v||v===sh.name) return; try{ await state.api.renameShop(sh.id,v); flash('Renamed'); renderShopRows(); }catch(e){ flash('Not saved: '+e.message); } } }, 'Rename'),
         h('button',{ 'data-act':'hide', onclick:async()=>{ try{ await state.api.hideShop(sh.id,!sh.hidden); flash(sh.hidden?'Back in the list':'Hidden from the list'); renderShopRows(); }catch(e){ flash('Not saved: '+e.message); } } }, sh.hidden?'Show in list':'Hide from list'),
+        h('button',{ 'data-act':'pins', onclick:()=>staffPinsSheet(sh) }, 'Employee PINs'),
         h('button',{ 'data-act':'managers', onclick:()=>pickManagers(sh) }, 'Managers'+((sh.managers||[]).length?' ('+sh.managers.length+')':'')),
         h('button',{ 'data-act':'enter', onclick:()=>enterAsAdmin(sh) }, 'Open this shop')));
   }));
+}
+/* each employee gets their own PIN: it opens the shop and tells the apps who they are, so nobody types a name */
+async function staffPinsSheet(sh){
+  const rnd=n=>{ const a=new Uint32Array(n); crypto.getRandomValues(a); return Array.from(a,x=>String(x%10)).join(''); };
+  const list=h('div',{ class:'pinlist', id:'pinList' }, h('div',{ class:'spin' }));
+  const nameIn=h('input',{ id:'epName', placeholder:'Name, e.g. Hazel', autocomplete:'off' });
+  const pinIn=h('input',{ id:'epPin', inputmode:'numeric', autocomplete:'off', placeholder:'PIN, e.g. '+rnd(6), maxlength:'12' });
+  const lockBox=sh.access==='open' ? h('label',{ class:'mgr', style:{ marginTop:'8px' } }, h('input',{ type:'checkbox', id:'epLock', checked:true }), ' Lock the shop: only these PINs open it (right now anyone with the link can)') : null;
+  const err=h('div',{ class:'err hidden' });
+  const load=async()=>{ let rows=[]; try{ rows=await state.api.staffPins(sh.id); }catch(e){ list.textContent='Couldn’t load: '+e.message; return; }
+    list.replaceChildren(...(rows.length?rows.map(r=>h('div',{ class:'pinrow', 'data-pin':r.id }, h('b',null,r.name), h('span',{ class:'pinv' }, r.pin),
+      h('button',{ class:'mbtn', 'data-act':'del', onclick:async()=>{ if(!await askYes('Remove '+r.name+'’s PIN?','Their PIN stops opening '+sh.name+' straight away. Phones already signed in stay in until the shop PIN changes.','Remove')) return;
+        try{ await state.api.removeStaffPin(r.id); flash('Removed'); load(); }catch(e){ flash(e.message); } } }, 'Remove'))):[h('p',{ class:'note' },'No employee PINs yet.')])); };
+  const m=h('div',{ class:'modal', id:'pinsSheet' }, h('div',{ class:'sheet' },
+    h('div',{ class:'sheethead' }, h('b',null,'Employees & PINs · '+sh.name), h('button',{ class:'x', html:'✕', onclick:()=>m.remove() })),
+    h('p',{ class:'note' }, 'Give each person their own PIN. They type it once on their phone; the app then knows who they are, so nobody types a name. 6 numbers is safer than 4.'),
+    list,
+    h('div',{ class:'pinadd' }, nameIn, pinIn, h('button',{ class:'mrow accent', id:'epAdd', onclick:async ev=>{
+      const n=nameIn.value.trim(), p=pinIn.value.trim(); err.classList.add('hidden');
+      if(!n){ nameIn.focus(); return; }
+      if(!/^[A-Za-z0-9]{4,12}$/.test(p)){ err.textContent='The PIN needs 4 to 12 numbers or letters.'; err.classList.remove('hidden'); pinIn.focus(); return; }
+      ev.target.disabled=true;
+      try{
+        let locked='';
+        if(sh.access==='open' && $('#epLock') && $('#epLock').checked){ const sp=rnd(8); await state.api.setShopAccess(sh.id,'password',sp); sh.access='password'; locked=sp;
+          if(state.me && state.me.shopId===sh.id){ state.me.shopAccess='password'; } lockBox.remove(); }
+        await state.api.addStaffPin(sh.id, n, p);
+        nameIn.value=''; pinIn.value=''; pinIn.placeholder='PIN, e.g. '+rnd(6);
+        flash(locked ? n+' added. Shop locked; the shop PIN is '+locked : n+' added'); load(); renderHome(); if(state.me && state.me.is_admin && $('#shopRows')) renderShopRows();
+      }catch(e){ err.textContent=e.message; err.classList.remove('hidden'); }
+      ev.target.disabled=false; nameIn.focus(); } }, 'Add')),
+    lockBox, err));
+  document.body.append(m); load(); setTimeout(()=>nameIn.focus(),50);
 }
 async function pickManagers(sh){
   let staff=state.staff; if(!staff || !staff.length){ try{ staff=state.staff=await state.api.staff(); }catch(e){ flash(e.message); return; } }

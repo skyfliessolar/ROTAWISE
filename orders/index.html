@@ -139,7 +139,7 @@ async function makeApi(){
     rw,who:w,visit,
     async me(){
       if(visit)return {id:w.uid,name:w.name,employee_code:w.code||'admin',is_admin:w.admin,is_manager:true,store_id:'main',visiting:true,shopName:visit.name};
-      if(w.kind==='shop')return {id:w.uid,name:'',employee_code:'shop',shared:true,is_manager:true,store_id:'main',shopName:w.name};
+      if(w.kind==='shop')return {id:w.uid,name:rw.personName?rw.personName():'',employee_code:'shop',shared:true,is_manager:true,store_id:'main',shopName:w.name};
       if(w.kind==='admin')return {id:w.uid,name:'Admin',employee_code:'admin',is_admin:true,is_manager:true,allStores:true};
       return {id:w.uid,name:w.name,employee_code:w.code,is_manager:w.manager,is_admin:w.admin,store_id:w.stores[0]||null,extraStores:w.stores,allStores:!w.stores.length};
     },
@@ -339,25 +339,27 @@ function openSubmit(){
   if(!lines.length){flash('Your list is empty');return}
   const shared=!!(S.me.is_shop||S.me.shared);
   let savedName='';try{savedName=localStorage.getItem('go_name')||''}catch(e){}
-  const nameIn=h('input',{type:'text',id:'subName',placeholder:'Your name',value:shared?savedName:(S.me.name||S.me.employee_code)});
+  const knownName=shared?savedName:(S.me.name||S.me.employee_code||'');
+  // the person's PIN (or their own login) already says who they are: only an unnamed shop login can add a name, and it is optional
+  const nameIn=h('input',{type:'text',id:'subName',placeholder:'Your name (optional)',value:knownName});
   const noteIn=h('textarea',{id:'subNote',rows:'2',placeholder:'Anything the manager should know (optional)'});
   const m=h('div',{class:'modal'},h('div',{class:'sheet'},
     h('h3',null,'Check your list'),
     h('div',null,lines.map(l=>h('div',{class:'row'},pic(l.p),
       h('div',{class:'nm'},h('b',null,l.p.code?h('span',{class:'code'},l.p.code):null,label(l.p)),h('small',null,l.p.price!=null?money(l.p.price)+' each':'')),
       h('input',{type:'number',class:'num',min:'0',step:'1',value:l.q,'aria-label':'How many '+label(l.p),onchange:e=>{l.q=Math.max(0,Math.round(Number(e.target.value)||0))}})))),
-    h('label',{class:'l',for:'subName'},shared?'Your name (so the manager knows who sent it)':'Sent by'),nameIn,
+    knownName?h('p',{class:'note',id:'subBy'},'Sent by '+knownName):[h('label',{class:'l',for:'subName'},'Your name (optional)'),nameIn],
     h('label',{class:'l',for:'subNote'},'Note'),noteIn,
     h('div',{class:'bar'},
       h('button',{class:'btn good',id:'subSend',onclick:async e=>{
-        const who=nameIn.value.trim();if(!who){nameIn.focus();nameIn.style.borderColor='var(--bad)';return}
+        const who=nameIn.value.trim()||null;
         const keep=lines.filter(l=>l.q>0);if(!keep.length){flash('Nothing to send');return}
         e.target.disabled=true;
         try{
           // shop products not stocked here yet are added from the supplier catalogue first
           for(const l of keep)if(l.p.cat){const c=l.p.cat;const it=await S.api.addItem({store_id:S.store,code:c.code,supplier:c.supplier,category:c.category,name:c.name,size:c.size||null,price:c.price,photo:c.photo,note:c.note,created_by:S.me.id});S.items.push(it);l.item_id=it.id}else l.item_id=l.p.item.id;
           await S.api.submit({store_id:S.store,submitted_by:S.me.id,submitted_by_name:who,note:noteIn.value.trim()||null,item_count:keep.length,status:'new'},keep.map(l=>({item_id:l.item_id,qty:l.q})));
-          if(shared)try{localStorage.setItem('go_name',who)}catch(er){}
+
           S.basket={};saveBasket();m.remove();flash('Sent to your manager. Thank you!');await reload();
         }catch(er){e.target.disabled=false;flash('Not sent: '+er.message)}
       }},'Submit to manager'),
@@ -578,8 +580,7 @@ function expSheet(e){
   const rIn=h('input',{id:'expReduce',type:'datetime-local',value:e.reduce_at||''});
   const note=h('input',{id:'expNote',placeholder:'Shelf, aisle or anything else (optional)',value:e.note||''});
   const priceIn=h('input',{id:'expPrice',type:'number',min:'0',step:'0.01',inputmode:'decimal',placeholder:'e.g. 1.25',value:e.price==null?'':e.price});
-  const shared=!!(S.me.shared||S.me.is_shop);let myName='';try{myName=localStorage.getItem('go_name')||''}catch(er){}
-  const who=shared&&isNew?h('input',{id:'expWho',placeholder:'Your name',value:myName,autocomplete:'name'}):null;
+  let myName='';try{myName=localStorage.getItem('go_name')||''}catch(er){}
   const dateBox=h('div');
   const expiry=()=>monthOnly?(mIn.value?lastOfMonth(mIn.value):''):dIn.value;
   const sync=()=>{dateBox.replaceChildren(monthOnly?mIn:dIn);const x=expiry();if(x&&!reduceTouched)rIn.value=defReduce(x)};
@@ -604,18 +605,15 @@ function expSheet(e){
     h('label',{class:'chkrow'},mChk,' Only the month is on the pack (e.g. "BBE MAR 2027")'),
     h('label',{class:'fl'},'Reduce the price on',rIn,h('small',{style:{fontWeight:400}},expDays()+' days before it expires, unless you pick another date and time.')),
     h('label',{class:'fl'},'Note',note),
-    who?h('label',{class:'fl'},'Your name (so the manager knows who added it)',who):null,
     h('div',{class:'photobtns',style:{marginTop:'12px'}},
       h('button',{class:'btn',id:'expSave',onclick:async ev=>{
         const x=expiry(),n=name.value.trim();
-        if(who&&!who.value.trim())return flash('Type your name');
-        if(who){try{localStorage.setItem('go_name',who.value.trim())}catch(er){}}
         if(!n)return flash('Type the product');if(!x)return flash('Pick the expiry date');
         const it=S.items.find(i=>label(i).toLowerCase()===n.toLowerCase()),c=!it&&S.catalog.find(c=>(c.name+(c.size?' '+c.size:'')).toLowerCase()===n.toLowerCase());
         const row={store_id:S.store,name:n,qty:qty.value===''?null:Math.max(1,Math.round(Number(qty.value))),expiry:x,month_only:monthOnly,reduce_at:rIn.value||defReduce(x),note:note.value.trim()||null,price:priceIn.value===''?null:Math.round(Number(priceIn.value)*100)/100,
           photo:e.photo||(it&&it.photo)||(c&&c.photo)||null,item_id:it?it.id:null,code:(it&&it.code)||(c&&c.code)||null};
         ev.target.disabled=true;
-        try{if(isNew){row.status='open';row.created_at=new Date().toISOString();row.created_by=S.me.id;row.created_by_name=(who&&who.value.trim())||S.me.name||null;S.exp.push(await S.api.addExpiry(row))}
+        try{if(isNew){row.status='open';row.created_at=new Date().toISOString();row.created_by=S.me.id;row.created_by_name=(S.me.shared||S.me.is_shop?myName:S.me.name)||myName||null;S.exp.push(await S.api.addExpiry(row))}
           else{if(row.reduce_at!==e.reduce_at)row.mailed_reduce=null;if(row.expiry!==e.expiry)row.mailed_remove=null;await S.api.updateExpiry(e.id,row);Object.assign(S.exp.find(z=>z.id===e.id),row)}
           flash('Saved');m.remove();render()}catch(er){ev.target.disabled=false;flash('Not saved: '+er.message)}}},'Save'),
       !isNew?h('button',{class:'btn alt',id:'expDel',onclick:async()=>{if(!confirm('Delete this expiry date?'))return;try{await S.api.delExpiry(e.id);S.exp=S.exp.filter(z=>z.id!==e.id);m.remove();render()}catch(er){flash(er.message)}}},'Delete'):null,
@@ -771,8 +769,8 @@ function expiryAlert(){
 /* ---------------- shops: switch shop, add a shop (name, with or without a PIN) ---------------- */
 function setShopBtn(t){const b=$('#shopBtn');if(!b)return;b.textContent=t+' ▾';b.classList.remove('hidden');b.onclick=openShopSheet}
 function afterShopChange(url){try{if(parent!==window){parent.postMessage({rw:'shop-changed'},location.origin)}}catch(e){}location.href=url||location.pathname}
-function askShopPin(name){return new Promise(res=>{const inp=h('input',{id:'spPin',type:'password',autocomplete:'off',placeholder:'Shop PIN'});
-  const done=v=>{m.remove();res(v)};const m=h('div',{class:'modal'},h('div',{class:'sheet'},h('h2',{style:{marginTop:0}},name),h('p',{class:'note'},'Type the shop PIN. You only need to do this once on this phone.'),inp,
+function askShopPin(name){return new Promise(res=>{const inp=h('input',{id:'spPin',type:'password',autocomplete:'off',placeholder:'Your PIN'});
+  const done=v=>{m.remove();res(v)};const m=h('div',{class:'modal'},h('div',{class:'sheet'},h('h2',{style:{marginTop:0}},name),h('p',{class:'note'},'Type your PIN: your own or the shop PIN. You only need to do this once on this phone.'),inp,
     h('div',{class:'photobtns'},h('button',{class:'btn',id:'spOk',onclick:()=>done(inp.value.trim()||null)},'Open'),h('button',{class:'btn alt',onclick:()=>done(null)},'Cancel'))));
   inp.onkeydown=e=>{if(e.key==='Enter')done(inp.value.trim()||null)};document.body.append(m);setTimeout(()=>inp.focus(),50)})}
 function shopChooser(){
@@ -789,7 +787,7 @@ function shopChooser(){
       const list=await rw.listShops().catch(()=>[]);
       rows=list.map(sh=>h('button',{class:'shoprow','data-shop':sh.id,onclick:async()=>{
         let pin;if(sh.access==='password'){pin=await askShopPin(sh.name);if(!pin)return}
-        const r=await rw.enterShop(sh.id,pin);if(r.error)return bad(r.error==='wrong'?'That shop PIN isn’t right.':r.error==='locked'?'This shop now has a PIN. Tap it again and type the PIN.':r.error);
+        const r=await rw.enterShop(sh.id,pin);if(r.error)return bad(r.error==='wrong'?'That PIN isn’t right.':r.error==='locked'?'This shop now has a PIN. Tap it again and type the PIN.':r.error);
         try{localStorage.setItem('rw_shop',sh.id)}catch(e){}afterShopChange()}},h('b',null,sh.name),h('small',null,sh.access==='open'?'Open':'PIN')));
     }
     box.replaceChildren(...(rows.length?rows:[h('p',{class:'note'},'No shops yet. Add the first one.')]),err,

@@ -73,7 +73,7 @@ export async function whoami() {
   return { kind: 'staff', uid: u.uid, space: 'main', name: x.name || x.code, code: x.code, email: x.email || '', role,
     admin: role === 'admin', manager: role === 'admin' || role === 'manager', stores: Array.isArray(x.stores) ? x.stores : [], apps: x.apps || null };
 }
-export async function signOut() { const { Au, auth } = await fb(); try { await Au.signOut(auth); } catch (e) {} }
+export async function signOut() { const { Au, auth } = await fb(); try { await Au.signOut(auth); } catch (e) {} try { localStorage.removeItem('rw_person'); localStorage.removeItem('go_name'); } catch (e) {} }
 
 /* personal login: Gas login code + PIN, or the owner's email + password */
 export async function signInPerson(id, pin) {
@@ -94,9 +94,39 @@ export async function listShops() {
   const s = await F.getDocs(F.collection(db, 'hub_shops'));
   return s.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.hidden).sort((a, b) => (a.nameLower || '').localeCompare(b.nameLower || ''));
 }
+/* Employee PINs: each person in a shop can have their own PIN. hub_pins/<shop>_<hash of shop+PIN> holds the
+   person's name and the shop's login, so typing your PIN opens the shop AND tells the apps who you are. */
+const pinDocId = async (shop, pin) => {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(shop + ':' + String(pin).trim()));
+  return shop + '_' + Array.from(new Uint8Array(b), x => x.toString(16).padStart(2, '0')).join('').slice(0, 40);
+};
+const setPerson = name => { try { name ? localStorage.setItem('go_name', name) : localStorage.removeItem('go_name'); localStorage.setItem('rw_person', name || ''); } catch (e) {} };
+export const personName = () => { try { return localStorage.getItem('rw_person') || ''; } catch (e) { return ''; } };
+export async function staffPins(shop) {
+  const { F, db } = await fb();
+  const s = await F.getDocs(F.query(F.collection(db, 'hub_pins'), F.where('shop', '==', shop)));
+  return s.docs.map(d => ({ id: d.id, name: d.data().name, pin: d.data().pin, createdAt: d.data().createdAt })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+export async function addStaffPin(shop, name, pin) {
+  const { F, db } = await fb();
+  name = cleanName(name); pin = String(pin || '').trim();
+  if (name.length < 1 || name.length > 40) throw new Error('Type the person’s name.');
+  if (!/^[A-Za-z0-9]{4,12}$/.test(pin)) throw new Error('The PIN needs 4 to 12 numbers or letters.');
+  const k = await F.getDoc(F.doc(db, 'hub_keys', shop)); if (!k.exists()) throw new Error('Shop not found');
+  if (pin === k.data().pw) throw new Error('That is the shop PIN. Pick a different PIN for this person.');
+  const id = await pinDocId(shop, pin), ref = F.doc(db, 'hub_pins', id);
+  const was = await F.getDoc(ref); if (was.exists()) throw new Error('That PIN is already ' + was.data().name + '’s. Pick another.');
+  await F.setDoc(ref, { shop, name, pin, pw: k.data().pw, createdAt: Date.now() });
+  return { id, name, pin };
+}
+export async function removeStaffPin(id) { const { F, db } = await fb(); await F.deleteDoc(F.doc(db, 'hub_pins', id)); }
+
 export async function enterShop(id, typed) {
   const { F, Au, db, auth } = await fb();
-  let raw = typed;
+  let raw = typed, person = '';
+  if (raw != null) {   // an employee's own PIN?
+    try { const d = await F.getDoc(F.doc(db, 'hub_pins', await pinDocId(id, raw))); if (d.exists() && d.data().shop === id) { raw = d.data().pw; person = d.data().name || ''; } } catch (e) {}
+  }
   if (raw == null) {
     let k; try { k = await F.getDoc(F.doc(db, 'hub_keys', id)); } catch (e) { return { error: 'locked' }; }
     if (!k.exists()) return { error: 'locked' };
@@ -104,7 +134,8 @@ export async function enterShop(id, typed) {
   }
   try { if (auth.currentUser) await Au.signOut(auth); await Au.signInWithEmailAndPassword(auth, shopEmail(id), authPw(raw)); }
   catch (e) { return { error: friendly(e) }; }
-  return { ok: true };
+  setPerson(person);
+  return { ok: true, person };
 }
 export async function createShop(name, password, { keepSession, hidden } = {}) {
   const { F, Au, db, auth } = await fb();
@@ -137,6 +168,9 @@ export async function setShopAccess(id, mode, password) {
   catch (e) { // put the old password back so the key and the login never disagree
     if (amShop) await Au.updatePassword(auth.currentUser, authPw(old)); throw e; }
   await F.updateDoc(F.doc(db, 'hub_shops', id), { access: mode, updatedAt: Date.now() });
+  // employee PINs carry the shop's login, so they follow the new one
+  try { const pins = await F.getDocs(F.query(F.collection(db, 'hub_pins'), F.where('shop', '==', id)));
+    if (!pins.empty) { const b = F.writeBatch(db); pins.docs.forEach(d => b.update(d.ref, { pw: raw })); await b.commit(); } } catch (e) {}
   return { pw: raw };
 }
 export async function renameShop(id, name) {
